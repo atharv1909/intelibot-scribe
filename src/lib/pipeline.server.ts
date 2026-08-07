@@ -446,7 +446,7 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         "   - Use ONLY standard, official PyTorch APIs. DO NOT invent non-existent module attributes (e.g. do NOT use `torch.quantization.RoundingMode`) or unauthenticated HuggingFace Hub downloads.\n" +
         "3. HIGH-PERFORMANCE PYTORCH MODEL DESIGN & TRAINING PRACTICES:\n" +
         "   - Class Imbalance & Loss Weighting: Compute class weights using numpy counts (`classes, counts = np.unique(y_train, return_counts=True); weights = len(y_train) / (len(classes) * counts)`) and pass them to `nn.CrossEntropyLoss(weight=torch.tensor(weights, dtype=torch.float32))` to prevent class collapse.\n" +
-        "   - Feature Scaling: ALWAYS scale numerical features using `StandardScaler` (`scaler.fit_transform(X_train)`, `scaler.transform(X_test)`) to ensure optimal gradient convergence.\n" +
+        "   - Feature Scaling & Float32 Dtype: Scale numerical features using `StandardScaler` (`scaler.fit_transform(X_train)`, `scaler.transform(X_test)`) and ALWAYS convert input tensors to single-precision float32 (`torch.tensor(X, dtype=torch.float32)`) before feeding into PyTorch models to prevent Double/Float dtype mismatches.\n" +
         "   - Modern Model Architecture: Add `nn.LayerNorm` and `nn.Dropout(p=0.1)` to neural network layers to prevent overfitting and improve generalization.\n" +
         "   - For single-input models, use `nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=d_model, nhead=8, dim_feedforward=d_model*4, dropout=0.1, batch_first=True), num_layers=3)`.\n" +
         "   - Project input features using `self.input_proj = nn.Linear(input_dim, d_model)` if `input_dim != d_model`.\n" +
