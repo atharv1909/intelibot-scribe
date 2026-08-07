@@ -42,6 +42,7 @@ class PlagiarismRequest(BaseModel):
 @app.post("/api/execute")
 @app.post("/execute")
 @app.post("/api/py/execute")
+@app.post("/")
 async def execute_code(req: ExecuteRequest):
     agent = SupervisorAgent(req.project_id, req.user_id)
     result = agent.execute_and_evaluate(
