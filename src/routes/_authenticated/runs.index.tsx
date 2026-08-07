@@ -52,7 +52,6 @@ function RunsPage() {
     const files = e.target.files;
     if (!files?.length) return;
     setUploading(true);
-    const backendUrl = "http://localhost:8000";
     const newNames: string[] = [...pdfNames];
     let combinedStyle = writingStyle;
 
@@ -60,14 +59,25 @@ function RunsPage() {
       try {
         const form = new FormData();
         form.append("file", file);
-        const res = await fetch(`${backendUrl}/api/extract-pdf`, {
+        
+        let res = await fetch("/api/extract-pdf", {
           method: "POST",
           body: form,
         });
+        
+        if (!res.ok) {
+          res = await fetch("http://localhost:8000/api/extract-pdf", {
+            method: "POST",
+            body: form,
+          });
+        }
+        
         if (res.ok) {
           const json = await res.json();
           combinedStyle += (combinedStyle ? "\n\n" : "") + json.data.style_text;
           newNames.push(json.data.filename);
+        } else {
+          toast.error(`Could not parse PDF text from ${file.name}`);
         }
       } catch (err) {
         console.error("PDF upload failed:", err);

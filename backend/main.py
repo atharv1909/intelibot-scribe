@@ -54,27 +54,30 @@ async def plagiarism_check(req: PlagiarismRequest):
 @app.post("/api/extract-pdf")
 async def extract_pdf(file: UploadFile = File(...)):
     """Extract representative writing style lines from an uploaded PDF."""
-    import fitz  # PyMuPDF
-    
     contents = await file.read()
+    all_lines = []
+    
+    # 1. Try pypdf (lightweight pure python)
     try:
-        import fitz
-        doc = fitz.open(stream=contents, filetype="pdf")
-        all_lines = []
-        for page in doc:
-            text = page.get_text()
-            lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 40]
-            all_lines.extend(lines)
-        doc.close()
-    except Exception:
         import io
         import pypdf
         reader = pypdf.PdfReader(io.BytesIO(contents))
-        all_lines = []
         for page in reader.pages:
             text = page.extract_text() or ""
-            lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 40]
+            lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 30]
             all_lines.extend(lines)
+    except Exception as e1:
+        # 2. Try fitz (PyMuPDF if installed)
+        try:
+            import fitz
+            doc = fitz.open(stream=contents, filetype="pdf")
+            for page in doc:
+                text = page.get_text()
+                lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 30]
+                all_lines.extend(lines)
+            doc.close()
+        except Exception as e2:
+            print(f"PDF extraction error: pypdf({e1}), fitz({e2})")
     
     # Sample ~30-40 representative lines evenly from the document
     total = len(all_lines)
