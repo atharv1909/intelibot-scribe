@@ -448,10 +448,10 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         "2. DATA & EVALUATION:\n" +
         "   - Use authentic real-world data relevant to the algorithm, or create realistic benchmark evaluation datasets matching the input specifications in the pseudocode.\n" +
         "   - If downloading a dataset from Kaggle, search ONLY for datasets specifically matching the exact domain of the pseudocode topic.\n" +
-        "3. PYTORCH & ALGORITHM SYNTAX CORRECTNESS:\n" +
-        "   - When building Transformer architectures in PyTorch for single-input classification/encoding, use `nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=model_size, nhead=8, batch_first=True), num_layers=2)` so `forward(x)` accepts a single input tensor `x`.\n" +
-        "   - If using `nn.Transformer`, pass both `src` and `tgt` positional arguments to `model(src, tgt)`.\n" +
-        "   - Ensure `torch.quantization.quantize_dynamic` targets matching linear/encoder layers.\n" +
+        "3. AUTHENTIC PYTORCH TRANSFORMER ARCHITECTURE (NO HARDCODING, NO FAKE TARGETS):\n" +
+        "   - Single-Input Tasks (Forecasting, Classification, Representation, Regression): DO NOT use `nn.Transformer` (which is an encoder-decoder requiring 2 inputs). Use `nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=model_size, nhead=8, batch_first=True), num_layers=2)` so `forward(x)` takes a single input tensor `x` cleanly.\n" +
+        "   - Sequence-to-Sequence (Seq2Seq / Autoregressive): If using `nn.Transformer(src, tgt)`, `tgt` MUST be a real shifted target sequence constructed from actual labeled data (`tgt_input = y[:, :-1, :]`). Never copy `src` or pass synthetic placeholders.\n" +
+        "   - Set `batch_first=True` on all TransformerEncoderLayer and TransformerDecoderLayer definitions for optimal PyTorch performance.\n" +
         "4. NO HARDCODING & REAL METRIC COMPUTATION:\n" +
         "   - DO NOT hardcode result metrics. Compute actual accuracy, precision, recall, and f1_score from your model's real predictions.\n" +
         "5. MANDATORY OUTPUT FORMAT:\n" +
