@@ -36,8 +36,8 @@ export const Route = createFileRoute("/api/execute")({
           const kaggleKey = process.env.KAGGLE_API_KEY || process.env.KAGGLE_KEY || "88888888888888888888888888888888";
           const kaggleUser = process.env.KAGGLE_USERNAME || "intelibot_sandbox";
 
-          // Auto-install missing packages in container if referenced (loud-failing, no silent swallows)
-          const autoInstallHeader = `import subprocess, sys, os\n` +
+          // Auto-install missing packages in container dynamically in a single pass (loud-failing)
+          const autoInstallHeader = `import subprocess, sys, os, re\n` +
             `os.environ["KAGGLE_USERNAME"] = "${kaggleUser}"\n` +
             `os.environ["KAGGLE_KEY"] = "${kaggleKey}"\n` +
             `os.environ["KAGGLE_API_KEY"] = "${kaggleKey}"\n\n` +

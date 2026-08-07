@@ -7,3 +7,11 @@ e2b-code-interpreter>=1.0.0
 pypdf>=3.0.0
 groq>=0.4.0
 python-multipart>=0.0.6
+scikit-learn
+pandas
+numpy
+scipy
+xgboost
+kaggle
+transformers
+
