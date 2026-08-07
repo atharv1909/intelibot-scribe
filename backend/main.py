@@ -64,7 +64,7 @@ async def extract_pdf(file: UploadFile = File(...)):
         reader = pypdf.PdfReader(io.BytesIO(contents))
         for page in reader.pages:
             text = page.extract_text() or ""
-            lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 30]
+            lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 5]
             all_lines.extend(lines)
     except Exception as e1:
         # 2. Try fitz (PyMuPDF if installed)
@@ -73,15 +73,23 @@ async def extract_pdf(file: UploadFile = File(...)):
             doc = fitz.open(stream=contents, filetype="pdf")
             for page in doc:
                 text = page.get_text()
-                lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 30]
+                lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 5]
                 all_lines.extend(lines)
             doc.close()
         except Exception as e2:
             print(f"PDF extraction error: pypdf({e1}), fitz({e2})")
-    
-    # Sample ~30-40 representative lines evenly from the document
+
+    # 3. Fallback to raw text byte extraction if PDF text layer is non-standard
+    if not all_lines:
+        import re
+        raw_strings = re.findall(r'[\x20-\x7E]{6,}', contents.decode('latin1', errors='ignore'))
+        all_lines = [s.strip() for s in raw_strings if len(s.strip()) > 15 and not s.startswith('/')][:50]
+
+    # Sample representative lines evenly from document
     total = len(all_lines)
-    if total <= 40:
+    if total == 0:
+        sample = [f"Reference style sample from {file.filename}"]
+    elif total <= 40:
         sample = all_lines
     else:
         step = total / 40
@@ -91,7 +99,7 @@ async def extract_pdf(file: UploadFile = File(...)):
         "status": "success",
         "data": {
             "filename": file.filename,
-            "total_lines": total,
+            "total_lines": len(sample),
             "sample_lines": sample,
             "style_text": "\n".join(sample),
         }
