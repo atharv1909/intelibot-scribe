@@ -72,12 +72,20 @@ function AuthPage() {
   }
 
   async function onGoogle() {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}${target}` },
-    });
-    if (error) {
-      toast.error(error.message || "Google sign-in failed");
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}${target}` },
+      });
+      if (error) {
+        if (error.message?.includes("not enabled") || error.message?.includes("validation_failed")) {
+          toast.error("Google sign-in is not enabled in Supabase yet. Please sign in with Email/Password below!");
+        } else {
+          toast.error(error.message || "Google sign-in failed");
+        }
+      }
+    } catch {
+      toast.error("Please sign in with Email & Password below!");
     }
   }
 
