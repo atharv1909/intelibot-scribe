@@ -1,4 +1,4 @@
-﻿export type StageDef = {
+export type StageDef = {
   name: string;
   blurb: string;
   gate?: boolean;
@@ -26,7 +26,7 @@ export const STAGES: StageDef[] = [
   { name: "Idea selection", blurb: "Follow, modify, or author your own idea.", gate: true, agent: "user" },
   {
     name: "Idea graph",
-    blurb: "Interactive graph showing how your idea connects to the rest of the field â€” novelty score, gaps, and risks.",
+    blurb: "Interactive graph showing how your idea connects to the rest of the field — novelty score, gaps, and risks.",
     agent: "graph-agent",
     supervised: true,
   },

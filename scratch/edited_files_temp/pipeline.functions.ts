@@ -10,17 +10,17 @@ import {
   distillMemoryImpl,
   executeImpl,
   formulateImpl,
+  generateIdeaGraphImpl,
   paperImpl,
   pseudocodeImpl,
   rerunImpl,
   reviewArtifactImpl,
-  runPlagiarismCheckImpl,
   runResearchImpl,
   selectIdeaImpl,
   surfaceIdeasImpl,
   theoryImpl,
 } from "./pipeline.server";
-import { generateIdeaGraphImpl } from "./idea-graph.server";
+
 import {
   supervisorAssessHealth,
   supervisorAutoAdvance,
@@ -33,7 +33,7 @@ export const createRun = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z
       .object({
-        prompt: z.string().min(3).max(4000),
+        prompt: z.string().min(8).max(4000),
         mode: z.enum(["vague", "detailed"]),
         methodology_style: z.enum(["defensive", "vague", "assertive", "replication"]),
         latex_template: z.enum(["neurips", "ieee", "acl", "elsevier"]),
@@ -67,6 +67,11 @@ export const selectIdea = createServerFn({ method: "POST" })
   )
   .handler(({ data, context }) => selectIdeaImpl(context.supabase, context.userId, data));
 
+export const generateIdeaGraph = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => projectInput.parse(d))
+  .handler(({ data, context }) => generateIdeaGraphImpl(context.supabase, context.userId, data.projectId));
+
 export const formulateIdea = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => projectInput.parse(d))
@@ -76,11 +81,6 @@ export const generatePseudocode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => pseudocodeImpl(context.supabase, context.userId, data.projectId));
-
-export const generateIdeaGraph = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
-  .handler(({ data, context }) => generateIdeaGraphImpl(context.supabase, context.userId, data.projectId));
 
 export const generateCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -145,6 +145,8 @@ export const runTheoryBranch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => theoryImpl(context.supabase, context.userId, data.projectId));
+
+/* ---- Supervisor agent functions ---- */
 
 export const getSupervisorStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

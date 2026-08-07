@@ -1,0 +1,508 @@
+﻿diff --git a/scratch/edited_files_temp/runs.$id.tsx b/src/routes/_authenticated/runs.$id.tsx
+index 44a0598..acb098c 100644
+--- a/scratch/edited_files_temp/runs.$id.tsx
++++ b/src/routes/_authenticated/runs.$id.tsx
+@@ -20,7 +20,6 @@ import {
+   generateIdeaGraph,
+   generatePaper,
+   generatePseudocode,
+-  getSupervisorStatus,
+   proposeArchitectureChange,
+   rerunExperiment,
+   reviewArtifact,
+@@ -29,7 +28,6 @@ import {
+   runTheoryBranch,
+   selectIdea,
+   surfaceIdeas,
+-  triggerSupervisorAdvance,
+ } from "@/lib/pipeline.functions";
+ 
+ export const Route = createFileRoute("/_authenticated/runs/$id")({
+@@ -114,20 +112,7 @@ function useRunData(id: string) {
+       return data;
+     },
+   });
+-  const supervisorDecisions = useQuery({
+-    queryKey: ["supervisor_decisions", id],
+-    queryFn: async () => {
+-      const { data, error } = await supabase
+-        .from("supervisor_decisions" as any)
+-        .select("*")
+-        .eq("project_id", id)
+-        .order("created_at", { ascending: false })
+-        .limit(50);
+-      if (error) return [];
+-      return data ?? [];
+-    },
+-  });
+-  return { project, sources, ideas, artifacts, versions, logs, supervisorDecisions };
++  return { project, sources, ideas, artifacts, versions, logs };
+ }
+ 
+ function RunWorkspace() {
+@@ -145,8 +130,8 @@ function RunWorkspace() {
+     research: useServerFn(runResearch),
+     ideas: useServerFn(surfaceIdeas),
+     select: useServerFn(selectIdea),
+-    ideaGraph: useServerFn(generateIdeaGraph),
+     formulate: useServerFn(formulateIdea),
++    graph: useServerFn(generateIdeaGraph),
+     pseudocode: useServerFn(generatePseudocode),
+     code: useServerFn(generateCode),
+     review: useServerFn(reviewArtifact),
+@@ -158,8 +143,6 @@ function RunWorkspace() {
+     plagiarism: useServerFn(runPlagiarismCheck),
+     memory: useServerFn(distillMemory),
+     theory: useServerFn(runTheoryBranch),
+-    supervisorStatus: useServerFn(getSupervisorStatus),
+-    supervisorAdvance: useServerFn(triggerSupervisorAdvance),
+   };
+ 
+   const [pending, setPending] = useState<string | null>(null);
+@@ -190,6 +173,7 @@ function RunWorkspace() {
+   const logs = data.logs.data ?? [];
+ 
+   const latest = (kind: string) => artifacts.filter((a) => a.kind === kind)[0];
++  const graph = latest("idea_graph");
+   const draft = latest("draft");
+   const pseudo = latest("pseudocode");
+   const code = latest("code");
+@@ -402,81 +386,37 @@ function RunWorkspace() {
+           </div>
+         </StageCard>
+ 
+-        {/* 5 ΓÇö Idea Graph */}
++                {/* 5 ΓÇö Idea Graph */}
+         <StageCard
+           index={5}
+           {...stageProps(5)}
+           active={project.stage === 5}
+           actions={
+             <Button
+-              disabled={pending === "ideaGraph" || !selected}
+-              onClick={() => run("ideaGraph", () => call.ideaGraph({ data: { projectId: id } }), "Idea positioning graph generated")}
++              disabled={pending === "graph" || !selected}
++              onClick={() => run("graph", () => call.graph({ data: { projectId: id } }), "Idea graph generated")}
+             >
+-              {pending === "ideaGraph" ? "Mapping graphΓÇª" : latest("idea_graph") ? "Regenerate idea graph" : "Generate idea graph"}
++              {pending === "graph" ? "Generating..." : graph ? "Regenerate Graph" : "Generate Idea Graph"}
+             </Button>
+           }
+         >
+-          {(() => {
+-            const graphArt = latest("idea_graph");
+-            if (!graphArt) return <Empty>Select an idea first to map its position in the field.</Empty>;
+-
+-            let parsed: any = null;
+-            try {
+-              parsed = JSON.parse(graphArt.content);
+-            } catch {
+-              parsed = null;
+-            }
+-
+-            if (!parsed) return <Mono>{graphArt.content}</Mono>;
+-
+-            return (
+-              <div className="space-y-4">
+-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-border bg-secondary/30 p-3">
+-                  <div>
+-                    <p className="rule-label">Novelty Score</p>
+-                    <p className="mt-1 text-2xl font-bold font-mono text-forest">
+-                      {Math.round((parsed.novelty_score ?? 0.8) * 100)}%
+-                    </p>
+-                  </div>
+-                  <div>
+-                    <p className="rule-label">Graph Network</p>
+-                    <p className="mt-1 text-xs font-mono text-muted-foreground">
+-                      {parsed.nodes?.length ?? 0} nodes ┬╖ {parsed.edges?.length ?? 0} relationship edges
+-                    </p>
+-                  </div>
+-                </div>
+-
+-                {parsed.positioning_summary && (
+-                  <div>
+-                    <p className="rule-label">Field Positioning Summary</p>
+-                    <p className="mt-1 text-xs text-foreground leading-relaxed">{parsed.positioning_summary}</p>
+-                  </div>
+-                )}
+-
+-                {/* Interactive Visual Graph Canvas */}
+-                {parsed.nodes && parsed.edges && (
+-                  <div>
+-                    <p className="rule-label mb-2">Interactive Idea Positioning Graph</p>
+-                    <IdeaGraphCanvas nodesData={parsed.nodes} edgesData={parsed.edges} />
+-                  </div>
+-                )}
+-
+-                {parsed.gap_analysis && (
+-                  <div className="rounded-sm border border-forest/40 p-3 bg-forest/5">
+-                    <p className="rule-label text-forest">Identified Field Gaps</p>
+-                    <p className="mt-1 text-xs">{parsed.gap_analysis}</p>
+-                  </div>
+-                )}
+-              </div>
+-            );
+-          })()}
++          {!graph ? (
++            <Empty>No idea graph generated yet.</Empty>
++          ) : (
++            <div className="h-[500px] w-full rounded-md border border-border bg-muted/20">
++              <IdeaGraphCanvas
++                nodesData={(graph.meta as any)?.nodes || []}
++                edgesData={(graph.meta as any)?.edges || []}
++              />
++            </div>
++          )}
+         </StageCard>
+ 
+         {/* 6 ΓÇö Formulation */}
+         <StageCard
+-          index={6}
+-          {...stageProps(6)}
+-          active={project.stage === 6}
++          index={5}
++          {...stageProps(5)}
++          active={project.stage === 5}
+           actions={
+             <Button
+               disabled={pending === "formulate" || !selected}
+@@ -508,11 +448,11 @@ function RunWorkspace() {
+           )}
+         </StageCard>
+ 
+-        {/* 7 & 8 ΓÇö Pseudocode */}
++        {/* 7 & 7 ΓÇö Pseudocode */}
+         <StageCard
+-          index={7}
+-          {...stageProps(7)}
+-          active={project.stage === 7}
++          index={6}
++          {...stageProps(6)}
++          active={project.stage === 6}
+           actions={
+             <Button
+               disabled={pending === "pseudo" || !draft}
+@@ -526,9 +466,9 @@ function RunWorkspace() {
+         </StageCard>
+ 
+         <ReviewStage
+-          index={8}
++          index={7}
+           artifact={pseudo}
+-          active={project.stage === 8}
++          active={project.stage === 7}
+           editing={editing}
+           setEditing={setEditing}
+           pending={pending === "review-pseudo"}
+@@ -549,11 +489,11 @@ function RunWorkspace() {
+           }
+         />
+ 
+-        {/* 9 & 10 ΓÇö Code */}
++        {/* 9 & 9 ΓÇö Code */}
+         <StageCard
+-          index={9}
+-          {...stageProps(9)}
+-          active={project.stage === 9}
++          index={8}
++          {...stageProps(8)}
++          active={project.stage === 8}
+           actions={
+             <Button
+               disabled={pending === "code" || pseudo?.status !== "approved"}
+@@ -567,9 +507,9 @@ function RunWorkspace() {
+         </StageCard>
+ 
+         <ReviewStage
+-          index={10}
++          index={9}
+           artifact={code}
+-          active={project.stage === 10}
++          active={project.stage === 9}
+           editing={editing}
+           setEditing={setEditing}
+           pending={pending === "review-code"}
+@@ -590,11 +530,11 @@ function RunWorkspace() {
+           }
+         />
+ 
+-        {/* 11 ΓÇö Sandboxed Execution */}
++        {/* 11 ΓÇö Execution */}
+         <StageCard
+-          index={11}
+-          {...stageProps(11)}
+-          active={project.stage === 11}
++          index={10}
++          {...stageProps(10)}
++          active={project.stage === 10}
+           actions={
+             <Button
+               disabled={pending === "execute" || code?.status !== "approved"}
+@@ -620,8 +560,8 @@ function RunWorkspace() {
+           )}
+         </StageCard>
+ 
+-        {/* 12, 13, 14 ΓÇö Results, rerun, architecture */}
+-        <StageCard index={12} {...stageProps(12)} active={project.stage === 12}>
++        {/* 12, 12, 13 ΓÇö Results, rerun, architecture */}
++        <StageCard index={11} {...stageProps(11)} active={project.stage === 11}>
+           {versions.length === 0 ? (
+             <Empty>No results yet.</Empty>
+           ) : (
+@@ -630,6 +570,7 @@ function RunWorkspace() {
+                 const metricsObj = (typeof v.metrics === "object" && v.metrics !== null ? v.metrics : {}) as Record<string, unknown>;
+                 const configObj = (typeof v.config === "object" && v.config !== null ? v.config : {}) as Record<string, unknown>;
+                 
++                // Extract model name if specified in config or metrics
+                 const modelName = String(configObj.model || configObj.model_type || configObj.algorithm || "ML / PyTorch Model");
+ 
+                 return (
+@@ -646,6 +587,7 @@ function RunWorkspace() {
+                       </span>
+                     </div>
+ 
++                    {/* Metrics Grid ΓÇö Clean & Non-overlapping */}
+                     {Object.keys(metricsObj).length > 0 && (
+                       <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 pt-1">
+                         {Object.entries(metricsObj).map(([key, val]) => {
+@@ -666,6 +608,7 @@ function RunWorkspace() {
+                       </div>
+                     )}
+ 
++                    {/* Config & Hyperparameters */}
+                     {Object.keys(configObj).length > 0 && (
+                       <div className="pt-1">
+                         <p className="rule-label">Hyperparameters & Configuration</p>
+@@ -688,9 +631,9 @@ function RunWorkspace() {
+         </StageCard>
+ 
+         <StageCard
+-          index={13}
+-          {...stageProps(13)}
+-          active={project.stage === 13}
++          index={12}
++          {...stageProps(12)}
++          active={project.stage === 12}
+           actions={
+             <Button
+               variant="secondary"
+@@ -705,9 +648,9 @@ function RunWorkspace() {
+         </StageCard>
+ 
+         <StageCard
+-          index={14}
+-          {...stageProps(14)}
+-          active={project.stage === 14}
++          index={13}
++          {...stageProps(13)}
++          active={project.stage === 13}
+           actions={
+             <Button
+               variant="outline"
+@@ -763,9 +706,9 @@ function RunWorkspace() {
+ 
+         {/* 15 ΓÇö Paper */}
+         <StageCard
+-          index={15}
+-          {...stageProps(15)}
+-          active={project.stage === 15}
++          index={14}
++          {...stageProps(14)}
++          active={project.stage === 14}
+           actions={
+             <>
+               <Button
+@@ -794,17 +737,139 @@ function RunWorkspace() {
+           {paper ? (
+             <div className="space-y-6">
+               <Mono>{paper.content}</Mono>
++
++              {/* Plagiarism Analysis Report from GoWinston AI */}
++              {(() => {
++                const plag = (paper.meta as { plagiarism?: Record<string, unknown> } | null)?.plagiarism;
++                if (!plag) return null;
++
++                if (!plag.success) {
++                  return (
++                    <div className="rounded-sm border border-destructive/40 bg-destructive/10 p-4 text-xs">
++                      <p className="font-semibold text-destructive">Plagiarism Check Notice</p>
++                      <p className="mt-1 text-muted-foreground">
++                        {String(plag.error || "Unable to reach GoWinston AI plagiarism service. The paper remains complete.")}
++                      </p>
++                    </div>
++                  );
++                }
++
++                // Handle score normalization (GoWinston can return 0.0-1.0 or 0-100)
++                let rawScore = Number(plag.score ?? 0);
++                if (rawScore <= 1 && rawScore > 0) rawScore = rawScore * 100;
++                const plagPercent = Math.min(100, Math.max(0, Math.round(rawScore)));
++                const originalityPercent = 100 - plagPercent;
++
++                const tone = originalityPercent >= 80 ? "forest" : originalityPercent >= 50 ? "warn" : "danger";
++                const toneColor = tone === "forest" ? "text-forest" : tone === "warn" ? "text-warn" : "text-destructive";
++                const strokeColor = tone === "forest" ? "#22c55e" : tone === "warn" ? "#eab308" : "#ef4444";
++
++                const sources = Array.isArray(plag.sources) ? plag.sources : [];
++
++                return (
++                  <div className="paper rounded-md border border-border p-5 shadow-sm space-y-4">
++                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
++                      <div>
++                        <div className="flex items-center gap-2">
++                          <h3 className="text-lg font-semibold">GoWinston AI Plagiarism Report</h3>
++                          <Chip tone={tone}>
++                            {originalityPercent >= 80 ? "Pass ΓÇó Highly Original" : originalityPercent >= 50 ? "Review Needed" : "High Risk"}
++                          </Chip>
++                        </div>
++                        <p className="mt-1 text-xs text-muted-foreground">
++                          Scanned against 400B+ web pages, journals, and databases
++                        </p>
++                      </div>
++                    </div>
++
++                    <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 items-center">
++                      {/* Visual Circular Gauge */}
++                      <div className="flex items-center gap-4 rounded-sm border border-border bg-secondary/30 p-3">
++                        <div className="relative flex h-16 w-16 items-center justify-center">
++                          <svg className="h-16 w-16 -rotate-90 transform" viewBox="0 0 36 36">
++                            <path
++                              className="text-border"
++                              strokeWidth="3.5"
++                              stroke="currentColor"
++                              fill="none"
++                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
++                            />
++                            <path
++                              strokeWidth="3.5"
++                              strokeDasharray={`${originalityPercent}, 100`}
++                              strokeLinecap="round"
++                              stroke={strokeColor}
++                              fill="none"
++                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
++                            />
++                          </svg>
++                          <span className={`absolute text-sm font-bold ${toneColor}`}>
++                            {originalityPercent}%
++                          </span>
++                        </div>
++                        <div>
++                          <p className="text-xs font-medium">Originality Score</p>
++                          <p className="text-[11px] text-muted-foreground">
++                            {plagPercent}% similarity detected
++                          </p>
++                        </div>
++                      </div>
++
++                      {/* Stat 2: Matched Sources */}
++                      <div className="rounded-sm border border-border bg-secondary/30 p-3">
++                        <p className="rule-label">Matched Sources</p>
++                        <p className="mt-1 text-xl font-bold">{sources.length}</p>
++                        <p className="text-[11px] text-muted-foreground">External overlaps found</p>
++                      </div>
++
++                      {/* Stat 3: Verification */}
++                      <div className="rounded-sm border border-border bg-secondary/30 p-3">
++                        <p className="rule-label">Verification Engine</p>
++                        <p className="mt-1 text-sm font-semibold">GoWinston AI v2</p>
++                        <p className="text-[11px] text-forest font-medium">Γ£ô Scanned & Verified</p>
++                      </div>
++                    </div>
++
++                    {/* Matched Sources List */}
++                    {sources.length > 0 && (
++                      <div className="mt-4 space-y-2 pt-2">
++                        <p className="rule-label">Overlapping Literature / Web Sources</p>
++                        <div className="max-h-40 space-y-1.5 overflow-auto pr-1">
++                          {sources.map((src: any, idx: number) => (
++                            <div
++                              key={idx}
++                              className="flex items-center justify-between rounded-sm border border-border px-3 py-1.5 text-xs"
++                            >
++                              <a
++                                href={src.url || "#"}
++                                target="_blank"
++                                rel="noreferrer"
++                                className="truncate font-medium hover:underline text-foreground/90 max-w-[80%]"
++                              >
++                                {src.title || src.url || `Matched Source #${idx + 1}`}
++                              </a>
++                              <span className="font-mono text-[11px] font-semibold text-warn">
++                                {Math.round(Number(src.similarity || src.score || 0) * (Number(src.similarity) <= 1 ? 100 : 1))}% match
++                              </span>
++                            </div>
++                          ))}
++                        </div>
++                      </div>
++                    )}
++                  </div>
++                );
++              })()}
+             </div>
+           ) : (
+             <Empty>A good result unlocks paper generation.</Empty>
+           )}
+         </StageCard>
+ 
+-        {/* 16 ΓÇö Strategic Memory */}
++        {/* 15 ΓÇö Memory */}
+         <StageCard
+-          index={16}
+-          {...stageProps(16)}
+-          active={project.stage === 16}
++          index={15}
++          {...stageProps(15)}
++          active={project.stage === 15}
+           actions={
+             <Button
+               variant="secondary"
+@@ -821,11 +886,11 @@ function RunWorkspace() {
+           </Empty>
+         </StageCard>
+ 
+-        {/* 17 ΓÇö Theory */}
++        {/* 16 ΓÇö Theory */}
+         <StageCard
+-          index={17}
+-          {...stageProps(17)}
+-          active={project.stage === 17}
++          index={16}
++          {...stageProps(16)}
++          active={project.stage === 16}
+           actions={
+             <Button
+               variant="outline"
+@@ -868,30 +933,10 @@ function RunWorkspace() {
+         </StageCard>
+       </div>
+ 
+-      {/* Sidebar: Supervisor Control & Audit Log */}
+-      <aside className="h-fit space-y-4 lg:sticky lg:top-20">
+-        <div className="paper p-4 border border-forest/30 bg-forest/5">
+-          <div className="flex items-center justify-between">
+-            <p className="rule-label text-forest">Autonomous Supervisor Agent</p>
+-            <Chip tone="forest">Active</Chip>
+-          </div>
+-          <p className="mt-1 text-xs text-muted-foreground">
+-            Oversees 11 sub-agents, checks data parameters, fixes bugs, and auto-advances non-gate stages.
+-          </p>
+-          <Button
+-            className="mt-3 w-full"
+-            size="sm"
+-            disabled={pending === "supervisor"}
+-            onClick={() =>
+-              run("supervisor", () => call.supervisorAdvance({ data: { projectId: id } }), "Supervisor evaluated pipeline")
+-            }
+-          >
+-            {pending === "supervisor" ? "Supervisor evaluating..." : "Auto-advance pipeline"}
+-          </Button>
+-        </div>
+-
++      {/* Audit log */}
++      <aside className="h-fit lg:sticky lg:top-20">
+         <div className="paper p-4">
+-          <p className="rule-label">Audit log & Governance</p>
++          <p className="rule-label">Audit log</p>
+           <div className="mt-3 max-h-[70vh] space-y-2 overflow-auto pr-1">
+             {logs.length === 0 && <Empty>Nothing logged yet.</Empty>}
+             {logs.map((l) => (

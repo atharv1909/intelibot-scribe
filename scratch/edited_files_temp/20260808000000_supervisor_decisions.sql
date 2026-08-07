@@ -1,4 +1,4 @@
-﻿-- Supervisor decisions table for autonomous pipeline supervision
+-- Supervisor decisions table for autonomous pipeline supervision
 CREATE TABLE IF NOT EXISTS public.supervisor_decisions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES public.projects ON DELETE CASCADE,

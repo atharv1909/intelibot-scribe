@@ -31,12 +31,12 @@ const STAGE_NAMES: Record<number, string> = {
 const SUPERVISOR_PROMPT =
   "You are the Supervisor Agent for a governed 17-stage AI research pipeline. " +
   "You oversee 11 specialized agents. Your job is to validate outputs, find bugs, " +
-  "ensure data completeness, and guide transitions. Be strict about data quality â€” " +
+  "ensure data completeness, and guide transitions. Be strict about data quality — " +
   "never allow hallucinated metrics, skipped parameters, or incomplete outputs. " +
   "When something is broken, identify the root cause and prescribe the fix. " +
   "Reply with valid JSON only.";
 
-/* â”€â”€â”€ Internal helpers â”€â”€â”€ */
+/* ─── Internal helpers ─── */
 
 async function logAudit(
   db: DB, userId: string, projectId: string,
@@ -107,7 +107,7 @@ async function gatherContext(db: DB, projectId: string, userId?: string) {
   };
 }
 
-/* â”€â”€â”€ Exported supervisor functions â”€â”€â”€ */
+/* ─── Exported supervisor functions ─── */
 
 /**
  * Evaluates the quality/correctness of a stage's output.
@@ -155,8 +155,8 @@ export async function supervisorPlanTransition(
   db: DB, userId: string, projectId: string, currentStage: number,
 ): Promise<{ action: "advance" | "retry" | "fallback" | "wait_for_human"; targetStage: number; reasoning: string; agentBrief: string; confidence: number }> {
   const fallback = { action: "wait_for_human" as const, targetStage: currentStage, reasoning: "Unable to plan", agentBrief: "", confidence: 0 };
-  if (HUMAN_GATES.has(currentStage as any)) {
-    return { action: "wait_for_human", targetStage: currentStage, reasoning: `Stage ${currentStage} (${STAGE_NAMES[currentStage]}) is a human gate â€” awaiting approval.`, agentBrief: "", confidence: 1.0 };
+  if (HUMAN_GATES.has(currentStage)) {
+    return { action: "wait_for_human", targetStage: currentStage, reasoning: `Stage ${currentStage} (${STAGE_NAMES[currentStage]}) is a human gate — awaiting approval.`, agentBrief: "", confidence: 1.0 };
   }
   try {
     const ctx = await gatherContext(db, projectId);
@@ -219,7 +219,7 @@ export async function supervisorGenerateAgentBrief(
 
 /**
  * Decides recovery strategy based on error and retry count.
- * retry < 2 â†’ retry same model | retry 2 â†’ fallback model | retry 3+ â†’ block
+ * retry < 2 → retry same model | retry 2 → fallback model | retry 3+ → block
  */
 export async function supervisorHandleFailure(
   db: DB, userId: string, projectId: string,
@@ -265,7 +265,7 @@ export async function supervisorAssessHealth(
           role: "user",
           content:
             `Assess the overall health of this research pipeline.\n\n` +
-            `Project: ${ctx.project.title} â€” currently at stage ${ctx.project.stage} (${STAGE_NAMES[ctx.project.stage ?? 1]})\n` +
+            `Project: ${ctx.project.title} — currently at stage ${ctx.project.stage} (${STAGE_NAMES[ctx.project.stage ?? 1]})\n` +
             `Mode: ${ctx.project.mode} | Status: ${ctx.project.status}\n` +
             `Sources: ${ctx.sources.length} (${ctx.sources.filter((s) => s.injection_flag).length} flagged)\n` +
             `Ideas: ${ctx.ideas.length} (${ctx.ideas.filter((i) => i.selected).length} selected)\n` +
@@ -286,7 +286,7 @@ export async function supervisorAssessHealth(
 
 /**
  * The main autonomous supervisor loop.
- * Evaluates current state â†’ decides transition â†’ auto-advances or waits.
+ * Evaluates current state → decides transition → auto-advances or waits.
  */
 export async function supervisorAutoAdvance(
   db: DB, userId: string, projectId: string,
@@ -297,8 +297,8 @@ export async function supervisorAutoAdvance(
 
     const currentStage = project.stage ?? STAGE.prompt;
 
-    // 1. If at a human gate â†’ wait
-    if (HUMAN_GATES.has(currentStage as any)) {
+    // 1. If at a human gate → wait
+    if (HUMAN_GATES.has(currentStage)) {
       const reasoning = `Stage ${currentStage} (${STAGE_NAMES[currentStage]}) requires human approval. Supervisor is providing recommendations but waiting.`;
       await logAudit(db, userId, projectId, currentStage, reasoning, "gate", {});
       await supervisorLogDecision(db, userId, projectId, currentStage, null, "guidance", reasoning, 1.0);
@@ -330,13 +330,13 @@ export async function supervisorAutoAdvance(
       await db.from("projects").update({ stage: nextStage }).eq("id", projectId);
       await supervisorLogDecision(db, userId, projectId, currentStage, nextStage, "advance", plan.reasoning, plan.confidence, { evaluation, plan });
       await logAudit(db, userId, projectId, currentStage,
-        `Supervisor auto-advanced: ${STAGE_NAMES[currentStage]} â†’ ${STAGE_NAMES[nextStage]} (confidence ${plan.confidence.toFixed(2)})`,
+        `Supervisor auto-advanced: ${STAGE_NAMES[currentStage]} → ${STAGE_NAMES[nextStage]} (confidence ${plan.confidence.toFixed(2)})`,
         "info", { fromStage: currentStage, toStage: nextStage },
       );
       return { advanced: true, fromStage: currentStage, toStage: nextStage, decision: "advance", waitingForHuman: false, reasoning: plan.reasoning };
     }
 
-    // 6. Hold â€” log why
+    // 6. Hold — log why
     await supervisorLogDecision(db, userId, projectId, currentStage, null, plan.action, plan.reasoning, plan.confidence, { evaluation, plan });
     await logAudit(db, userId, projectId, currentStage,
       `Supervisor holding: ${plan.action} (${evaluation.issues.length} issues, confidence ${plan.confidence.toFixed(2)})`,

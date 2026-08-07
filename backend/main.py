@@ -39,6 +39,9 @@ class ExecuteRequest(BaseModel):
 class FirewallRequest(BaseModel):
     prompt: str
 
+class PlagiarismRequest(BaseModel):
+    text: str
+
 @app.post("/api/firewall")
 @app.post("/api/py/firewall")
 async def check_prompt_firewall(req: FirewallRequest):

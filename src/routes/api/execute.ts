@@ -8,7 +8,7 @@ export const Route = createFileRoute("/api/execute")({
         try {
           const body = await request.json();
           const { code = "", config = {}, label = "baseline" } = body;
-          const e2bKey = process.env.E2B_API_KEY || "";
+          const e2bKey = process.env["E2B_API_KEY"] || "";
 
           if (!e2bKey) {
             return Response.json(
@@ -33,8 +33,8 @@ export const Route = createFileRoute("/api/execute")({
           }
 
           // Read Kaggle credentials from Vercel environment variables if available
-          const kaggleKey = process.env.KAGGLE_API_KEY || process.env.KAGGLE_KEY || "88888888888888888888888888888888";
-          const kaggleUser = process.env.KAGGLE_USERNAME || "intelibot_sandbox";
+          const kaggleKey = process.env["KAGGLE_KEY"] || process.env["KAGGLE_API_KEY"] || "88888888888888888888888888888888";
+          const kaggleUser = process.env["KAGGLE_USERNAME"] || "intelibot_sandbox";
 
           // Auto-install missing packages in container dynamically in a single pass (loud-failing)
           const autoInstallHeader = `import subprocess, sys, os, re\n` +
@@ -81,7 +81,7 @@ export const Route = createFileRoute("/api/execute")({
               );
             }
 
-            const metrics = JSON.parse(match[1]);
+            const metrics = JSON.parse(match[1] || "{}");
             const score = Number(metrics.accuracy ?? metrics.f1_score ?? 0);
             const verdict = score >= 0.90 ? "good" : "bad";
 

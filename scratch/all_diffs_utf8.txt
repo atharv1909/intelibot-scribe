@@ -1,0 +1,103 @@
+﻿\n--- DIFF FOR pipeline.functions.ts ---
+--- .\src/lib/pipeline.functions.ts
++++ scratch/edited_files_temp\pipeline.functions.ts
+@@ -11,9 +11,9 @@
+   executeImpl,
+   formulateImpl,
++  generateIdeaGraphImpl,
+   paperImpl,
+   pseudocodeImpl,
+   rerunImpl,
+   reviewArtifactImpl,
+-  runPlagiarismCheckImpl,
+   runResearchImpl,
+   selectIdeaImpl,
+@@ -21,5 +21,9 @@
+   theoryImpl,
+ } from "./pipeline.server";
+-import { generateIdeaGraphImpl } from "./idea-graph.server";
++
++import {
++  supervisorAssessHealth,
+
+... truncated
+\n--- DIFF FOR pipeline.server.ts ---
+--- .\src/lib/pipeline.server.ts
++++ scratch/edited_files_temp\pipeline.server.ts
+@@ -3,20 +3,8 @@
+ import { FIREWALL_SYSTEM, askJson, askText, wrapUntrusted } from "./ai.server";
+ import { retrieveSources, scanForInjection } from "./research.server";
++import { generateIdeaGraphImpl } from "./idea-graph.server";
+ import type { Database, Json } from "@/integrations/supabase/types";
+ 
+ export type DB = SupabaseClient<Database>;
+-
+-export function getBackendUrl(): string {
+-  if (process.env.PYTHON_BACKEND_URL) return process.env.PYTHON_BACKEND_URL;
+-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+-    const u = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+-    return u.startsWith("http") ? u : `https://${u}`;
+-  }
+-  if (process.env.VERCEL_URL) {
+-    const u = process.env.VERCEL_URL;
+-    return u.startsWith("http") ? u : `https://${u}`;
+-  }
+
+... truncated
+\n--- DIFF FOR sandbox.py ---
+--- .\backend/sandbox.py
++++ scratch/edited_files_temp\sandbox.py
+@@ -69,5 +69,5 @@
+     return Sandbox.create(
+         timeout=timeout_seconds,
+-        envs={"KAGGLE_API_TOKEN": os.getenv("KAGGLE_API_TOKEN", os.getenv("KAGGLE_API_KEY", ""))}
++        envs={"KAGGLE_API_TOKEN": os.getenv("KAGGLE_API_TOKEN", "")}
+     )
+ 
+@@ -102,5 +102,5 @@
+             api_key=api_key,
+             timeout=timeout_seconds,
+-            envs={"KAGGLE_API_TOKEN": os.getenv("KAGGLE_API_TOKEN", os.getenv("KAGGLE_API_KEY", ""))}
++            envs={"KAGGLE_API_TOKEN": os.getenv("KAGGLE_API_TOKEN", "")}
+         )
+         res = execute_on_sandbox_session(sbx, python_code)
+
+\n--- DIFF FOR stages.ts ---
+--- .\src/components/pipeline/stages.ts
++++ scratch/edited_files_temp\stages.ts
+@@ -4,12 +4,16 @@
+   gate?: boolean;
+   guard?: boolean;
++  agent?: string;
++  supervised?: boolean;
+ };
+ 
+ export const STAGES: StageDef[] = [
+-  { name: "Prompt input", blurb: "Vague or detailed mode, chosen by you." },
++  { name: "Prompt input", blurb: "Vague or detailed mode, chosen by you.", agent: "user" },
+   {
+     name: "Extensive research",
+     blurb: "Sub-agents run keyword + dense retrieval; every source is firewalled and provenance-tagged.",
+     guard: true,
++    agent: "research-agent",
++    supervised: true,
+   },
+   {
+
+... truncated
+\n--- DIFF FOR supervisor.py ---
+--- .\backend/supervisor.py
++++ scratch/edited_files_temp\supervisor.py
+@@ -43,9 +43,10 @@
+         result = run_code_in_sandbox(clean_code, timeout_seconds=900)
+         
+-        for i, cmd in enumerate(result.get('stdout', '').split('\n')[:5]): # log first few lines
++        for i, cmd in enumerate(result.get('stdout', '').split('\\n')[:5]): # log first few lines
+             self.log_audit(10, f"STDOUT: {cmd}", "sandbox", detail={"network": "denied", "isolated": True})
+             
+         # 2. Extract real metrics directly from code stdout JSON (no fake numbers!)
+         real_metrics = {}
++        import re
+         json_matches = re.findall(r'\{[^{}]*"(?:loss|accuracy|f1|precision|recall|score|psnr|ssim|mse|val_loss)"[^{}]*\}', result.get('stdout', ''), re.IGNORECASE)
+         if json_matches:
+

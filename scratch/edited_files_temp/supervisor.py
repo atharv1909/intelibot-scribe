@@ -1,16 +1,9 @@
 import json
 import logging
-import re
 from typing import Dict, Any, List
 
-try:
-    from backend.database import get_connection
-    from backend.llm_engine import call_llm
-    from backend.sandbox import run_code_in_sandbox
-except ModuleNotFoundError:
-    from database import get_connection
-    from llm_engine import call_llm
-    from sandbox import run_code_in_sandbox
+from llm_engine import call_llm
+from sandbox import run_code_in_sandbox
 
 logger = logging.getLogger(__name__)
 

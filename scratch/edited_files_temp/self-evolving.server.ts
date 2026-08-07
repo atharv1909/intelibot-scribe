@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Self-Evolving Agent Strategy Versioning & Governance Module
  *
  * Implements governed self-evolution using schema-locked JSON configs,

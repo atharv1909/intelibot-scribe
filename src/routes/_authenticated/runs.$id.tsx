@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Chip, Empty, Mono, Prose, StageCard } from "@/components/pipeline/primitives";
 import { STAGES } from "@/components/pipeline/stages";
+import { IdeaGraphCanvas } from "@/components/pipeline/IdeaGraphCanvas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,8 +17,10 @@ import {
   executeRun,
   formulateIdea,
   generateCode,
+  generateIdeaGraph,
   generatePaper,
   generatePseudocode,
+  getSupervisorStatus,
   proposeArchitectureChange,
   rerunExperiment,
   reviewArtifact,
@@ -26,6 +29,7 @@ import {
   runTheoryBranch,
   selectIdea,
   surfaceIdeas,
+  triggerSupervisorAdvance,
 } from "@/lib/pipeline.functions";
 
 export const Route = createFileRoute("/_authenticated/runs/$id")({
@@ -110,7 +114,20 @@ function useRunData(id: string) {
       return data;
     },
   });
-  return { project, sources, ideas, artifacts, versions, logs };
+  const supervisorDecisions = useQuery({
+    queryKey: ["supervisor_decisions", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("supervisor_decisions" as any)
+        .select("*")
+        .eq("project_id", id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) return [];
+      return data ?? [];
+    },
+  });
+  return { project, sources, ideas, artifacts, versions, logs, supervisorDecisions };
 }
 
 function RunWorkspace() {
@@ -128,6 +145,7 @@ function RunWorkspace() {
     research: useServerFn(runResearch),
     ideas: useServerFn(surfaceIdeas),
     select: useServerFn(selectIdea),
+    ideaGraph: useServerFn(generateIdeaGraph),
     formulate: useServerFn(formulateIdea),
     pseudocode: useServerFn(generatePseudocode),
     code: useServerFn(generateCode),
@@ -140,6 +158,8 @@ function RunWorkspace() {
     plagiarism: useServerFn(runPlagiarismCheck),
     memory: useServerFn(distillMemory),
     theory: useServerFn(runTheoryBranch),
+    supervisorStatus: useServerFn(getSupervisorStatus),
+    supervisorAdvance: useServerFn(triggerSupervisorAdvance),
   };
 
   const [pending, setPending] = useState<string | null>(null);
@@ -382,11 +402,81 @@ function RunWorkspace() {
           </div>
         </StageCard>
 
-        {/* 5 — Formulation */}
+        {/* 5 — Idea Graph */}
         <StageCard
           index={5}
           {...stageProps(5)}
           active={project.stage === 5}
+          actions={
+            <Button
+              disabled={pending === "ideaGraph" || !selected}
+              onClick={() => run("ideaGraph", () => call.ideaGraph({ data: { projectId: id } }), "Idea positioning graph generated")}
+            >
+              {pending === "ideaGraph" ? "Mapping graph…" : latest("idea_graph") ? "Regenerate idea graph" : "Generate idea graph"}
+            </Button>
+          }
+        >
+          {(() => {
+            const graphArt = latest("idea_graph");
+            if (!graphArt) return <Empty>Select an idea first to map its position in the field.</Empty>;
+
+            let parsed: any = null;
+            try {
+              parsed = JSON.parse(graphArt.content);
+            } catch {
+              parsed = null;
+            }
+
+            if (!parsed) return <Mono>{graphArt.content}</Mono>;
+
+            return (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-border bg-secondary/30 p-3">
+                  <div>
+                    <p className="rule-label">Novelty Score</p>
+                    <p className="mt-1 text-2xl font-bold font-mono text-forest">
+                      {Math.round((parsed.novelty_score ?? 0.8) * 100)}%
+                    </p>
+                  </div>
+                  <div>
+                    <p className="rule-label">Graph Network</p>
+                    <p className="mt-1 text-xs font-mono text-muted-foreground">
+                      {parsed.nodes?.length ?? 0} nodes · {parsed.edges?.length ?? 0} relationship edges
+                    </p>
+                  </div>
+                </div>
+
+                {parsed.positioning_summary && (
+                  <div>
+                    <p className="rule-label">Field Positioning Summary</p>
+                    <p className="mt-1 text-xs text-foreground leading-relaxed">{parsed.positioning_summary}</p>
+                  </div>
+                )}
+
+                {/* Interactive Visual Graph Canvas */}
+                {parsed.nodes && parsed.edges && (
+                  <div>
+                    <p className="rule-label mb-2">Interactive Idea Positioning Graph</p>
+                    <IdeaGraphCanvas nodesData={parsed.nodes} edgesData={parsed.edges} />
+                  </div>
+                )}
+
+                {parsed.gap_analysis && (
+                  <div className="rounded-sm border border-forest/40 p-3 bg-forest/5">
+                    <p className="rule-label text-forest">Identified Field Gaps</p>
+                    <p className="mt-1 text-xs">{parsed.gap_analysis}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </StageCard>
+
+        {/* 6 — Formulation */}
+        <StageCard
+          index={6}
+          {...stageProps(6)}
+          active={project.stage === 6}
           actions={
             <Button
               disabled={pending === "formulate" || !selected}
@@ -418,11 +508,11 @@ function RunWorkspace() {
           )}
         </StageCard>
 
-        {/* 6 & 7 — Pseudocode */}
+        {/* 7 & 8 — Pseudocode */}
         <StageCard
-          index={6}
-          {...stageProps(6)}
-          active={project.stage === 6}
+          index={7}
+          {...stageProps(7)}
+          active={project.stage === 7}
           actions={
             <Button
               disabled={pending === "pseudo" || !draft}
@@ -436,9 +526,9 @@ function RunWorkspace() {
         </StageCard>
 
         <ReviewStage
-          index={7}
+          index={8}
           artifact={pseudo}
-          active={project.stage === 7}
+          active={project.stage === 8}
           editing={editing}
           setEditing={setEditing}
           pending={pending === "review-pseudo"}
@@ -459,11 +549,11 @@ function RunWorkspace() {
           }
         />
 
-        {/* 8 & 9 — Code */}
+        {/* 9 & 10 — Code */}
         <StageCard
-          index={8}
-          {...stageProps(8)}
-          active={project.stage === 8}
+          index={9}
+          {...stageProps(9)}
+          active={project.stage === 9}
           actions={
             <Button
               disabled={pending === "code" || pseudo?.status !== "approved"}
@@ -477,9 +567,9 @@ function RunWorkspace() {
         </StageCard>
 
         <ReviewStage
-          index={9}
+          index={10}
           artifact={code}
-          active={project.stage === 9}
+          active={project.stage === 10}
           editing={editing}
           setEditing={setEditing}
           pending={pending === "review-code"}
@@ -500,11 +590,11 @@ function RunWorkspace() {
           }
         />
 
-        {/* 10 — Execution */}
+        {/* 11 — Sandboxed Execution */}
         <StageCard
-          index={10}
-          {...stageProps(10)}
-          active={project.stage === 10}
+          index={11}
+          {...stageProps(11)}
+          active={project.stage === 11}
           actions={
             <Button
               disabled={pending === "execute" || code?.status !== "approved"}
@@ -530,8 +620,8 @@ function RunWorkspace() {
           )}
         </StageCard>
 
-        {/* 11, 12, 13 — Results, rerun, architecture */}
-        <StageCard index={11} {...stageProps(11)} active={project.stage === 11}>
+        {/* 12, 13, 14 — Results, rerun, architecture */}
+        <StageCard index={12} {...stageProps(12)} active={project.stage === 12}>
           {versions.length === 0 ? (
             <Empty>No results yet.</Empty>
           ) : (
@@ -540,7 +630,6 @@ function RunWorkspace() {
                 const metricsObj = (typeof v.metrics === "object" && v.metrics !== null ? v.metrics : {}) as Record<string, unknown>;
                 const configObj = (typeof v.config === "object" && v.config !== null ? v.config : {}) as Record<string, unknown>;
                 
-                // Extract model name if specified in config or metrics
                 const modelName = String(configObj.model || configObj.model_type || configObj.algorithm || "ML / PyTorch Model");
 
                 return (
@@ -557,7 +646,6 @@ function RunWorkspace() {
                       </span>
                     </div>
 
-                    {/* Metrics Grid — Clean & Non-overlapping */}
                     {Object.keys(metricsObj).length > 0 && (
                       <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 pt-1">
                         {Object.entries(metricsObj).map(([key, val]) => {
@@ -578,7 +666,6 @@ function RunWorkspace() {
                       </div>
                     )}
 
-                    {/* Config & Hyperparameters */}
                     {Object.keys(configObj).length > 0 && (
                       <div className="pt-1">
                         <p className="rule-label">Hyperparameters & Configuration</p>
@@ -601,9 +688,9 @@ function RunWorkspace() {
         </StageCard>
 
         <StageCard
-          index={12}
-          {...stageProps(12)}
-          active={project.stage === 12}
+          index={13}
+          {...stageProps(13)}
+          active={project.stage === 13}
           actions={
             <Button
               variant="secondary"
@@ -618,9 +705,9 @@ function RunWorkspace() {
         </StageCard>
 
         <StageCard
-          index={13}
-          {...stageProps(13)}
-          active={project.stage === 13}
+          index={14}
+          {...stageProps(14)}
+          active={project.stage === 14}
           actions={
             <Button
               variant="outline"
@@ -674,11 +761,11 @@ function RunWorkspace() {
           )}
         </StageCard>
 
-        {/* 14 — Paper */}
+        {/* 15 — Paper */}
         <StageCard
-          index={14}
-          {...stageProps(14)}
-          active={project.stage === 14}
+          index={15}
+          {...stageProps(15)}
+          active={project.stage === 15}
           actions={
             <>
               <Button
@@ -835,11 +922,11 @@ function RunWorkspace() {
           )}
         </StageCard>
 
-        {/* 15 — Memory */}
+        {/* 16 — Strategic Memory */}
         <StageCard
-          index={15}
-          {...stageProps(15)}
-          active={project.stage === 15}
+          index={16}
+          {...stageProps(16)}
+          active={project.stage === 16}
           actions={
             <Button
               variant="secondary"
@@ -856,11 +943,11 @@ function RunWorkspace() {
           </Empty>
         </StageCard>
 
-        {/* 16 — Theory */}
+        {/* 17 — Theory */}
         <StageCard
-          index={16}
-          {...stageProps(16)}
-          active={project.stage === 16}
+          index={17}
+          {...stageProps(17)}
+          active={project.stage === 17}
           actions={
             <Button
               variant="outline"
@@ -903,10 +990,30 @@ function RunWorkspace() {
         </StageCard>
       </div>
 
-      {/* Audit log */}
-      <aside className="h-fit lg:sticky lg:top-20">
+      {/* Sidebar: Supervisor Control & Audit Log */}
+      <aside className="h-fit space-y-4 lg:sticky lg:top-20">
+        <div className="paper p-4 border border-forest/30 bg-forest/5">
+          <div className="flex items-center justify-between">
+            <p className="rule-label text-forest">Autonomous Supervisor Agent</p>
+            <Chip tone="forest">Active</Chip>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Oversees 11 sub-agents, checks data parameters, fixes bugs, and auto-advances non-gate stages.
+          </p>
+          <Button
+            className="mt-3 w-full"
+            size="sm"
+            disabled={pending === "supervisor"}
+            onClick={() =>
+              run("supervisor", () => call.supervisorAdvance({ data: { projectId: id } }), "Supervisor evaluated pipeline")
+            }
+          >
+            {pending === "supervisor" ? "Supervisor evaluating..." : "Auto-advance pipeline"}
+          </Button>
+        </div>
+
         <div className="paper p-4">
-          <p className="rule-label">Audit log</p>
+          <p className="rule-label">Audit log & Governance</p>
           <div className="mt-3 max-h-[70vh] space-y-2 overflow-auto pr-1">
             {logs.length === 0 && <Empty>Nothing logged yet.</Empty>}
             {logs.map((l) => (

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Idea Positioning Graph Generator (Stage 5)
  *
  * Generates an interactive graph demonstrating how the user's selected research idea
