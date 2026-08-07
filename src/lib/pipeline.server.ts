@@ -444,7 +444,9 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         "   - For tabular classification (discrete targets): Choose between `RandomForestClassifier`, `GradientBoostingClassifier`, `MLPClassifier`, `SVC`, or `PyTorch CPU` (`import torch`).\n" +
         "   - For tabular regression (continuous targets): Choose between `RandomForestRegressor`, `GradientBoostingRegressor`, `Ridge`, or `PyTorch CPU` (`import torch`).\n" +
         "   - DO NOT use tensorflow or keras (573MB, exceeds disk space). Use PyTorch CPU (`import torch`) or scikit-learn algorithms.\n" +
-        "Ensure deterministic seed, and print a JSON metrics dict at the very end. Return pure code only.\n\n" +
+        "7. MANDATORY OUTPUT FORMAT: At the very end of your script, compute real evaluation metrics using scikit-learn (accuracy, precision, recall, f1_score) and print:\n" +
+        "   `import json; print('RESULT_JSON:' + json.dumps({'accuracy': float(accuracy), 'precision': float(precision), 'recall': float(recall), 'f1_score': float(f1_score)}))`\n\n" +
+        "Ensure deterministic seed, and return pure code only.\n\n" +
         pseudo.content.slice(0, 9000),
     },
   ]);
