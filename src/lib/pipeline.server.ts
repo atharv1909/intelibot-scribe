@@ -444,12 +444,13 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         "1. STRICT ALGORITHM FIDELITY:\n" +
         "   - Implement the exact functions, classes, and algorithms specified in the pseudocode using standard public PyTorch CPU (`import torch`, `import torch.nn as nn`) or Scikit-learn.\n" +
         "   - Use ONLY standard, official PyTorch APIs. DO NOT invent non-existent module attributes (e.g. do NOT use `torch.quantization.RoundingMode`) or unauthenticated HuggingFace Hub downloads.\n" +
-        "2. CLEAN PYTORCH MODEL DESIGN:\n" +
-        "   - For single-input models, use `nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=d_model, nhead=8, batch_first=True), num_layers=2)`.\n" +
-        "   - If input dimension `input_dim != d_model`, project input features using `self.input_proj = nn.Linear(input_dim, d_model)` in `__init__` and `x = self.input_proj(x)` in `forward(x)`.\n" +
-        "   - For dynamic quantization, use standard `torch.quantization.quantize_dynamic(model, {nn.Linear}, dtype=torch.qint8)`.\n" +
-        "3. REAL TRAINING & EVALUATION LOOPS:\n" +
-        "   - Include an authentic PyTorch training loop (`model.train()`, `optimizer.zero_grad()`, `loss = criterion(output, target)`, `loss.backward()`, `optimizer.step()`) across training epochs before calling `model.eval()` and `torch.no_grad()` for evaluation.\n" +
+        "3. HIGH-PERFORMANCE PYTORCH MODEL DESIGN & TRAINING PRACTICES:\n" +
+        "   - Feature Scaling: ALWAYS scale numerical features using `StandardScaler` (`scaler.fit_transform(X_train)`, `scaler.transform(X_test)`) to ensure optimal gradient convergence.\n" +
+        "   - Modern Model Architecture: Add `nn.LayerNorm` and `nn.Dropout(p=0.1)` to neural network layers to prevent overfitting and improve generalization.\n" +
+        "   - For single-input models, use `nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=d_model, nhead=8, dim_feedforward=d_model*4, dropout=0.1, batch_first=True), num_layers=3)`.\n" +
+        "   - Project input features using `self.input_proj = nn.Linear(input_dim, d_model)` if `input_dim != d_model`.\n" +
+        "   - Modern Optimizer & Scheduler: Use `AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)` and `torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)` for smooth learning rate decay.\n" +
+        "   - Authentic Training Loop: Run a real PyTorch training loop (`model.train()`, `optimizer.zero_grad()`, `loss.backward()`, `optimizer.step()`, `scheduler.step()`) across 20-30 epochs, keeping track of the best model weights.\n" +
         "4. MANDATORY OUTPUT FORMAT:\n" +
         "   - Compute actual accuracy, precision, recall, and f1_score from your trained model's real predictions and print as a single final line using `json.dumps(..., allow_nan=False)`:\n" +
         "   `import json; print('RESULT_JSON:' + json.dumps({'accuracy': float(accuracy), 'precision': float(precision), 'recall': float(recall), 'f1_score': float(f1_score)}, allow_nan=False))`\n\n" +
