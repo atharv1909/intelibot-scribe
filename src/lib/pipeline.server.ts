@@ -523,58 +523,31 @@ async function executeVersion(
     .maybeSingle();
   const version = (last?.version ?? 0) + 1;
 
-  // 1. Send the code to our real Python FastAPI backend for E2B execution and Groq evaluation!
+  // 1. Send the code to our real Python FastAPI backend for E2B execution!
   const backendUrl = getBackendUrl();
-  let pyResult: any = null;
+  const res = await fetch(`${backendUrl}/api/execute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project_id: projectId,
+      user_id: userId,
+      code: code.content,
+      config: opts.config,
+      label: opts.label,
+      architecture_change: opts.architecture_change
+    })
+  });
 
-  try {
-    const res = await fetch(`${backendUrl}/api/execute`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        project_id: projectId,
-        user_id: userId,
-        code: code.content,
-        config: opts.config,
-        label: opts.label,
-        architecture_change: opts.architecture_change
-      })
-    });
-    if (res.ok) {
-      const json = await res.json();
-      pyResult = json.data;
-    }
-  } catch (err) {
-    console.warn("Backend execute fetch failed, using fallback evaluator:", err);
+  if (!res.ok) {
+    const errText = await res.text().catch(() => res.statusText);
+    throw new Error(`E2B Sandbox execution failed (${res.status}): ${errText}`);
   }
 
-  if (!pyResult) {
-    // Robust fallback evaluator if backend container endpoint is unreachable from SSR Node function
-    const evalPrompt = `Evaluate the following Python ML research code:\n${code.content.slice(0, 3000)}\nProduce realistic execution metrics. Return JSON {"metrics": {"accuracy": 0.942, "precision": 0.938, "recall": 0.945, "f1_score": 0.941}, "score": 0.942, "verdict": "good", "analysis": "Model execution completed cleanly in sandboxed pipeline.", "stdout": "Model training & evaluation complete."}`;
-    try {
-      pyResult = await askJson(
-        [
-          { role: "system", content: "You evaluate ML code execution." },
-          { role: "user", content: evalPrompt }
-        ],
-        {
-          metrics: { accuracy: 0.942, precision: 0.938, recall: 0.945, f1_score: 0.941 },
-          score: 0.942,
-          verdict: "good",
-          analysis: "Model training & evaluation completed cleanly.",
-          stdout: "Execution complete."
-        }
-      );
-    } catch {
-      pyResult = {
-        metrics: { accuracy: 0.942, precision: 0.938, recall: 0.945, f1_score: 0.941 },
-        score: 0.942,
-        verdict: "good",
-        analysis: "Model training & evaluation completed cleanly.",
-        stdout: "Execution complete."
-      };
-    }
+  const json = await res.json();
+  if (json.status !== "success" || !json.data) {
+    throw new Error(`E2B Sandbox returned error: ${json.data?.error || "Unknown container error"}`);
   }
+  const pyResult = json.data;
 
   const { data: created, error } = await db
     .from("experiment_versions")

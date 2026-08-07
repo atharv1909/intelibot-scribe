@@ -41,27 +41,14 @@ class PlagiarismRequest(BaseModel):
 
 @app.post("/api/execute")
 async def execute_code(req: ExecuteRequest):
-    try:
-        agent = SupervisorAgent(req.project_id, req.user_id)
-        result = agent.execute_and_evaluate(
-            code=req.code,
-            config=req.config,
-            label=req.label,
-            architecture_change=req.architecture_change
-        )
-        return {"status": "success", "data": result}
-    except Exception as e:
-        print(f"Execute error: {e}")
-        return {
-            "status": "success",
-            "data": {
-                "metrics": {"accuracy": 0.942, "f1_score": 0.941, "precision": 0.938, "recall": 0.945},
-                "score": 0.942,
-                "verdict": "good",
-                "analysis": "Pipeline execution completed in sandbox environment. Benchmark metrics validated.",
-                "stdout": "Model evaluation completed cleanly."
-            }
-        }
+    agent = SupervisorAgent(req.project_id, req.user_id)
+    result = agent.execute_and_evaluate(
+        code=req.code,
+        config=req.config,
+        label=req.label,
+        architecture_change=req.architecture_change
+    )
+    return {"status": "success", "data": result}
 
 @app.post("/api/plagiarism")
 async def plagiarism_check(req: PlagiarismRequest):
