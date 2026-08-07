@@ -50,14 +50,35 @@ class SupervisorAgent:
         for i, cmd in enumerate(result.get('stdout', '').split('\\n')[:5]): # log first few lines
             self.log_audit(10, f"STDOUT: {cmd}", "sandbox", detail={"network": "denied", "isolated": True})
             
-        # 2. Evaluate with LLM
+        stdout_str = result.get('stdout', '')
+        stderr_str = result.get('stderr', '')
+        
+        # 2. Check for RESULT_JSON emitted by training script in stdout
+        match = re.search(r'RESULT_JSON:(\{.*?\})', stdout_str)
+        if match:
+            try:
+                metrics = json.loads(match.group(1))
+                score = float(metrics.get('accuracy', metrics.get('f1_score', 0)))
+                verdict = "good" if score >= 0.90 else "bad"
+                return {
+                    "metrics": metrics,
+                    "score": score,
+                    "verdict": verdict,
+                    "analysis": f"Evaluated run ({label}) from live E2B container execution.",
+                    "stdout": stdout_str,
+                    "stderr": stderr_str,
+                }
+            except Exception as parse_err:
+                logger.warning(f"Failed to parse RESULT_JSON string: {parse_err}")
+
+        # 3. Fallback to LLM evaluation if RESULT_JSON is missing
         prompt = f"""
         You are the sandbox execution reporter. The code was executed in an isolated container.
         Here is the output from the sandbox:
         Success: {result['success']}
         Error: {result['error']}
         STDOUT:
-        {result['stdout'][-2000:]}
+        {stdout_str[-2000:]}
         
         Produce a realistic execution report.
         Return JSON with:
@@ -71,12 +92,13 @@ class SupervisorAgent:
         try:
             eval_data = json.loads(eval_json)
         except:
-            eval_data = {"metrics": {}, "score": 0, "verdict": "bad", "analysis": "Failed to parse LLM evaluation"}
+            eval_data = {"metrics": {}, "score": 0, "verdict": "bad", "analysis": "Failed to parse evaluation report"}
 
         return {
             "metrics": eval_data.get('metrics', {}),
-            "score": eval_data.get('score'),
-            "verdict": eval_data.get('verdict'),
+            "score": eval_data.get('score', 0),
+            "verdict": eval_data.get('verdict', 'bad'),
             "analysis": eval_data.get('analysis', ''),
-            "stdout": result['stdout']
+            "stdout": stdout_str,
+            "stderr": stderr_str,
         }
