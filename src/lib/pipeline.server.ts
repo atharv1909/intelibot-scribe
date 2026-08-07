@@ -448,12 +448,13 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         "2. DATA & EVALUATION:\n" +
         "   - Use authentic real-world data relevant to the algorithm, or create realistic benchmark evaluation datasets matching the input specifications in the pseudocode.\n" +
         "   - If downloading a dataset from Kaggle, search ONLY for datasets specifically matching the exact domain of the pseudocode topic.\n" +
-        "3. AUTHENTIC PYTORCH TRANSFORMER ARCHITECTURE (NO HARDCODING, NO FAKE TARGETS):\n" +
+        "3. AUTHENTIC PYTORCH TRANSFORMER ARCHITECTURE & REAL TRAINING LOOPS:\n" +
         "   - Single-Input Tasks (Forecasting, Classification, Representation, Regression): DO NOT use `nn.Transformer` (which is an encoder-decoder requiring 2 inputs). Use `nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=model_size, nhead=8, batch_first=True), num_layers=2)` so `forward(x)` takes a single input tensor `x` cleanly.\n" +
         "   - Sequence-to-Sequence (Seq2Seq / Autoregressive): If using `nn.Transformer(src, tgt)`, `tgt` MUST be a real shifted target sequence constructed from actual labeled data (`tgt_input = y[:, :-1, :]`). Never copy `src` or pass synthetic placeholders.\n" +
         "   - Set `batch_first=True` on all TransformerEncoderLayer and TransformerDecoderLayer definitions for optimal PyTorch performance.\n" +
+        "   - MANDATORY PYTORCH TRAINING LOOP: You MUST include an actual PyTorch model training loop (`model.train()`, `optimizer.zero_grad()`, `loss = criterion(output, target)`, `loss.backward()`, `optimizer.step()`) across epochs before evaluating with `model.eval()` and `torch.no_grad()`. DO NOT evaluate a randomly initialized model inside `torch.no_grad()` without training first!\n" +
         "4. NO HARDCODING & REAL METRIC COMPUTATION:\n" +
-        "   - DO NOT hardcode result metrics. Compute actual accuracy, precision, recall, and f1_score from your model's real predictions.\n" +
+        "   - DO NOT hardcode result metrics. Compute actual accuracy, precision, recall, and f1_score from your trained model's real predictions.\n" +
         "5. MANDATORY OUTPUT FORMAT:\n" +
         "   - At the end of the script, output the real evaluated metrics as a single line:\n" +
         "   `import json; print('RESULT_JSON:' + json.dumps({'accuracy': float(accuracy), 'precision': float(precision), 'recall': float(recall), 'f1_score': float(f1_score)}))`\n\n" +
