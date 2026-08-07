@@ -47,9 +47,14 @@ export const Route = createFileRoute("/api/execute")({
             `    except ImportError:\n` +
             `        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', _pkg])\n` +
             `try:\n` +
-            `    import torch\n` +
-            `except ImportError:\n` +
-            `    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', 'torch', '--index-url', 'https://download.pytorch.org/whl/cpu'])\n\n`;
+            `    import torch, torch.nn as _nn\n` +
+            `    _orig_trans_fwd = _nn.Transformer.forward\n` +
+            `    def _patched_trans_fwd(self, src, tgt=None, *args, **kwargs):\n` +
+            `        if tgt is None: tgt = src\n` +
+            `        return _orig_trans_fwd(self, src, tgt, *args, **kwargs)\n` +
+            `    _nn.Transformer.forward = _patched_trans_fwd\n` +
+            `except Exception:\n` +
+            `    pass\n\n`;
 
           const codeToRun = autoInstallHeader + cleanCode;
 
