@@ -451,8 +451,8 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         "3. REAL TRAINING & EVALUATION LOOPS:\n" +
         "   - Include an authentic PyTorch training loop (`model.train()`, `optimizer.zero_grad()`, `loss = criterion(output, target)`, `loss.backward()`, `optimizer.step()`) across training epochs before calling `model.eval()` and `torch.no_grad()` for evaluation.\n" +
         "4. MANDATORY OUTPUT FORMAT:\n" +
-        "   - Compute actual accuracy, precision, recall, and f1_score from your trained model's real predictions and print as a single final line:\n" +
-        "   `import json; print('RESULT_JSON:' + json.dumps({'accuracy': float(accuracy), 'precision': float(precision), 'recall': float(recall), 'f1_score': float(f1_score)}))`\n\n" +
+        "   - Compute actual accuracy, precision, recall, and f1_score from your trained model's real predictions and print as a single final line using `json.dumps(..., allow_nan=False)`:\n" +
+        "   `import json; print('RESULT_JSON:' + json.dumps({'accuracy': float(accuracy), 'precision': float(precision), 'recall': float(recall), 'f1_score': float(f1_score)}, allow_nan=False))`\n\n" +
         "Return pure runnable Python code only inside ```python ... ``` fences.\n\n" +
         "[APPROVED PSEUDOCODE TO TRANSLATE]\n" +
         pseudo.content.slice(0, 9000),
