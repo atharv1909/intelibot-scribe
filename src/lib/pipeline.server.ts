@@ -6,6 +6,13 @@ import type { Database, Json } from "@/integrations/supabase/types";
 
 export type DB = SupabaseClient<Database>;
 
+export function getBackendUrl(): string {
+  if (process.env.PYTHON_BACKEND_URL) return process.env.PYTHON_BACKEND_URL;
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:8000";
+}
+
 export const STAGE = {
   prompt: 1,
   research: 2,
@@ -760,12 +767,6 @@ export async function paperImpl(db: DB, userId: string, projectId: string) {
         `Return pure LaTeX code starting with \\documentclass. Ensure maximal depth, detail, and rigor.`,
     },
   ]);
-
-function getBackendUrl(): string {
-  if (process.env.PYTHON_BACKEND_URL) return process.env.PYTHON_BACKEND_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:8000";
-}
 
   // Run plagiarism check via Python backend with 12s fast timeout
   let plagiarismResult: Record<string, unknown> = {};
