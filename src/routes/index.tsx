@@ -25,7 +25,7 @@ function Landing() {
   return (
     <main 
       className="min-h-screen relative bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url('/landing-bg.jpg')" }}
+      style={{ backgroundImage: "url('/landing-bg.jpeg')" }}
     >
       <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] dark:bg-background/80" />
       <div className="relative mx-auto max-w-5xl px-6 py-20 z-10">
