@@ -793,9 +793,9 @@ export async function paperImpl(db: DB, userId: string, projectId: string) {
     {
       role: "user",
       content:
-        `Write a COMPREHENSIVE, EXTENSIVE 6-PAGE ACADEMIC RESEARCH PAPER in LaTeX using the ${project.latex_template} format and a ${project.methodology_style} research tone.\n\n` +
+        `Write a COMPREHENSIVE, EXTENSIVE 6-PAGE ACADEMIC RESEARCH PAPER in LaTeX using standard \\documentclass{article} with neurips/IEEE standard packages and a ${project.methodology_style} research tone.\n\n` +
         `REQUIRED EXTENSIVE STRUCTURE & DEPTH (APPROX 3,500+ WORDS):\n` +
-        `- \\documentclass and packages (amsmath, amssymb, booktabs, graphicx, hyperref, microtype)\n` +
+        `- ALWAYS START WITH: \\documentclass[11pt,a4paper]{article} \\usepackage[margin=1in]{geometry} \\usepackage{amsmath,amssymb,booktabs,graphicx,hyperref,microtype}\n` +
         `- \\title{${idea.title}}\n` +
         `- Abstract: Comprehensive 250-300 word summary of problem, theoretical motivation, sandboxed empirical methodology, key quantitative findings, and broader impact.\n` +
         `- Section 1: Introduction (Exhaustive 4-paragraph background, problem formalization, key challenges, and explicit bulleted list of 3 major contributions).\n` +
