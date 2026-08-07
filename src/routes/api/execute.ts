@@ -81,7 +81,28 @@ export const Route = createFileRoute("/api/execute")({
               );
             }
 
-            const metrics = JSON.parse(match[1]);
+            let rawJson = match[1].trim();
+            if (rawJson.startsWith("{'") || (rawJson.includes("'") && !rawJson.includes('"'))) {
+              rawJson = rawJson.replace(/'/g, '"');
+            }
+            rawJson = rawJson
+              .replace(/\bNone\b/g, "null")
+              .replace(/\bNaN\b/g, "0.0")
+              .replace(/\bTrue\b/g, "true")
+              .replace(/\bFalse\b/g, "false");
+
+            let metrics: Record<string, any>;
+            try {
+              metrics = JSON.parse(rawJson);
+            } catch {
+              // Fallback regex extraction of key-value pairs
+              metrics = {};
+              const pairMatches = match[1].matchAll(/['"]?([a-zA-Z0-9_]+)['"]?\s*:\s*([0-9\.]+)/g);
+              for (const p of pairMatches) {
+                metrics[p[1]] = parseFloat(p[2]);
+              }
+            }
+
             const score = Number(metrics.accuracy ?? metrics.f1_score ?? 0);
             const verdict = score >= 0.90 ? "good" : "bad";
 
