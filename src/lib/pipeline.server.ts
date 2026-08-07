@@ -427,28 +427,16 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
       content:
         "Translate this approved pseudocode into a single runnable Python file. " +
         "CRITICAL INSTRUCTIONS TO PREVENT HALLUCINATION: " +
-        "1. DO NOT include `subprocess.run` or `pip install`. The sandbox natively auto-installs all your imports. " +
-        "2. DO NOT HARDCODE A STATIC KAGGLE DATASET NAME. You MUST dynamically search Kaggle for the most relevant and popular dataset matching this research topic using `kaggle.api.dataset_list`: \n" +
-        "   ```python\n" +
-        "   import kaggle\n" +
-        "   search_terms = '...' # 2-3 relevant keywords from the research topic\n" +
-        "   found = kaggle.api.dataset_list(search=search_terms, sort_by='hottest')\n" +
-        "   dataset_ref = found[0].ref if found else 'sulianov/heart-failure-clinical-data'\n" +
-        "   kaggle.api.dataset_download_cli(dataset_ref, unzip=True)\n" +
-        "   ```\n" +
-        "3. DO NOT guess the downloaded CSV filename. Use `import glob; df = pd.read_csv(glob.glob('**/*.csv', recursive=True)[0])` to load the unzipped CSV dynamically. " +
-        "4. ROBUST DATA PREPROCESSING (MANDATORY TO PREVENT 'UNKNOWN LABEL TYPE' ERRORS):\n" +
-        "   - Drop non-predictive ID/Image columns: `drop_cols = [c for c in ['Image', 'id', 'ID', 'image', 'filename'] if c in df.columns]; df = df.drop(columns=drop_cols)`.\n" +
-        "   - Drop missing values: `df = df.dropna()`.\n" +
-        "   - Target column: Select target label column (e.g., 'Class', 'target', 'label', or `df.columns[-1]`).\n" +
-        "   - Force label encoding: ALWAYS encode target labels using `from sklearn.preprocessing import LabelEncoder; y = LabelEncoder().fit_transform(df[target_col].astype(str))` to guarantee clean integer classes (0, 1, 2...).\n" +
-        "   - Feature Matrix X: Select strictly numeric features: `X = df.drop(columns=[target_col]).select_dtypes(include='number')`.\n" +
+        "1. DO NOT include `subprocess.run` or `pip install` in generated code.\n" +
+        "2. ROBUST DATASET GENERATION & PREPROCESSING:\n" +
+        "   - DO NOT use `import kaggle` or external API calls for datasets.\n" +
+        "   - ALWAYS generate realistic benchmark data dynamically using `from sklearn.datasets import make_classification, make_regression, load_breast_cancer, load_iris` or `numpy.random` with a fixed seed (`random_state=42`).\n" +
+        "   - Target column: Select target label column (e.g., 'Class', 'target', 'label', or integer `y`).\n" +
+        "   - Force label encoding: ALWAYS encode target labels using `from sklearn.preprocessing import LabelEncoder; y = LabelEncoder().fit_transform(y.astype(str))` to guarantee clean integer classes (0, 1, 2...).\n" +
         "   - Split & Scale: Use `train_test_split(X, y, test_size=0.2, random_state=42)` then scale features with `StandardScaler` (`scaler.fit_transform(X_train)`, `scaler.transform(X_test)`).\n" +
         "5. DO NOT hardcode the final metrics. You MUST dynamically compute them using `sklearn.metrics` (accuracy, precision, recall, f1) on your actual model's predictions. " +
         "6. DYNAMIC DATA-DRIVEN MODEL SELECTION (DO NOT HARDCODE A SINGLE MODEL FAMILY BLINDLY):\n" +
-        "   - Inspect the target label and dataset size dynamically to choose the BEST model architecture:\n" +
-        "   - For tabular classification (discrete targets): Choose between `RandomForestClassifier`, `GradientBoostingClassifier`, `MLPClassifier`, `SVC`, or `PyTorch CPU` (`import torch`).\n" +
-        "   - For tabular regression (continuous targets): Choose between `RandomForestRegressor`, `GradientBoostingRegressor`, `Ridge`, or `PyTorch CPU` (`import torch`).\n" +
+        "   - Choose between `RandomForestClassifier`, `GradientBoostingClassifier`, `MLPClassifier`, `SVC`, or `PyTorch CPU` (`import torch`).\n" +
         "   - DO NOT use tensorflow or keras (573MB, exceeds disk space). Use PyTorch CPU (`import torch`) or scikit-learn algorithms.\n" +
         "7. MANDATORY OUTPUT FORMAT: At the very end of your script, compute real evaluation metrics using scikit-learn (accuracy, precision, recall, f1_score) and print:\n" +
         "   `import json; print('RESULT_JSON:' + json.dumps({'accuracy': float(accuracy), 'precision': float(precision), 'recall': float(recall), 'f1_score': float(f1_score)}))`\n\n" +

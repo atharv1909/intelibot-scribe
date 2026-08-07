@@ -32,12 +32,22 @@ export const Route = createFileRoute("/api/execute")({
             cleanCode = cleanCode.replace(/^```(?:python)?\n?/i, "").replace(/\n?```$/i, "").trim();
           }
 
+          // Auto-install missing packages in container if referenced
+          const autoInstallHeader = `import subprocess, sys\n` +
+            `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy')]:\n` +
+            `    try:\n` +
+            `        __import__(_mod)\n` +
+            `    except ImportError:\n` +
+            `        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', _pkg])\n\n`;
+
+          const codeToRun = autoInstallHeader + cleanCode;
+
           // 1. Provision live E2B Sandbox using official SDK
           const sbx = await Sandbox.create({ apiKey: e2bKey });
 
           try {
             // 2. Execute code in E2B sandbox container
-            const execution = await sbx.runCode(cleanCode);
+            const execution = await sbx.runCode(codeToRun);
 
             const stdout = (execution.logs.stdout || []).join("\n");
             const stderr = (execution.logs.stderr || []).join("\n");
