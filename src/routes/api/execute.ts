@@ -41,11 +41,15 @@ export const Route = createFileRoute("/api/execute")({
             `os.environ["KAGGLE_USERNAME"] = "${kaggleUser}"\n` +
             `os.environ["KAGGLE_KEY"] = "${kaggleKey}"\n` +
             `os.environ["KAGGLE_API_KEY"] = "${kaggleKey}"\n` +
-            `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy'), ('xgboost', 'xgboost'), ('scipy', 'scipy'), ('torch', 'torch')]:\n` +
+            `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy'), ('xgboost', 'xgboost'), ('scipy', 'scipy')]:\n` +
             `    try:\n` +
             `        __import__(_mod)\n` +
             `    except ImportError:\n` +
             `        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', _pkg])\n` +
+            `try:\n` +
+            `    import torch\n` +
+            `except ImportError:\n` +
+            `    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', 'torch', '--index-url', 'https://download.pytorch.org/whl/cpu'])\n` +
             `try:\n` +
             `    import torch, torch.nn as _nn\n` +
             `    _orig_trans_fwd = _nn.Transformer.forward\n` +
