@@ -36,8 +36,15 @@ class ExecuteRequest(BaseModel):
     label: str = "baseline"
     architecture_change: bool = False
 
-class PlagiarismRequest(BaseModel):
-    text: str
+class FirewallRequest(BaseModel):
+    prompt: str
+
+@app.post("/api/firewall")
+@app.post("/api/py/firewall")
+async def check_prompt_firewall(req: FirewallRequest):
+    from firewall import is_prompt_safe
+    result = is_prompt_safe(req.prompt)
+    return {"status": "success", "data": result}
 
 @app.post("/api/execute")
 @app.post("/execute")

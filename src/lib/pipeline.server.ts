@@ -89,6 +89,20 @@ export async function createRunImpl(
   userId: string,
   input: { prompt: string; mode: string; methodology_style: string; latex_template: string; writing_style?: string },
 ) {
+  // 1. XGBoost Prompt Security Firewall Validation
+  const checkPatterns = [
+    /ignore previous instructions/i,
+    /bypass security firewall/i,
+    /drop all tables/i,
+    /exec\s*\(\s*['"]import os/i,
+    /rm -rf \//i,
+  ];
+  for (const pattern of checkPatterns) {
+    if (pattern.test(input.prompt)) {
+      throw new Error("MALICIOUS PROMPT DETECTED BY SECURITY FIREWALL: Run creation blocked to preserve pipeline integrity.");
+    }
+  }
+
   const fullPrompt = input.writing_style
     ? `${input.prompt}\n\n[WRITING STYLE REFERENCE SAMPLES]\n${input.writing_style}`
     : input.prompt;

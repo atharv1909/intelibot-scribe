@@ -34,11 +34,15 @@ export const Route = createFileRoute("/api/execute")({
 
           // Auto-install missing packages in container if referenced
           const autoInstallHeader = `import subprocess, sys\n` +
-            `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy')]:\n` +
+            `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('pandas', 'pandas'), ('numpy', 'numpy')]:\n` +
             `    try:\n` +
             `        __import__(_mod)\n` +
             `    except ImportError:\n` +
-            `        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', _pkg])\n\n`;
+            `        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', _pkg])\n` +
+            `try:\n` +
+            `    import torch\n` +
+            `except ImportError:\n` +
+            `    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', 'torch', '--index-url', 'https://download.pytorch.org/whl/cpu'])\n\n`;
 
           const codeToRun = autoInstallHeader + cleanCode;
 
