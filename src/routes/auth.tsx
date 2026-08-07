@@ -96,7 +96,12 @@ function AuthPage() {
       toast.success("Signed in as Demo Researcher!");
       void navigate({ to: target });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Quick sign in failed");
+      const msg = err instanceof Error ? err.message : "Quick sign in failed";
+      if (msg.toLowerCase().includes("invalid api key")) {
+        toast.error("Invalid Supabase API key! Please add VITE_SUPABASE_PUBLISHABLE_KEY to your Vercel Environment Variables.");
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setBusy(false);
     }
