@@ -796,9 +796,14 @@ export async function paperImpl(db: DB, userId: string, projectId: string) {
       role: "user",
       content:
         `Write a COMPREHENSIVE, EXTENSIVE 6-PAGE ACADEMIC RESEARCH PAPER in LaTeX using standard \\documentclass{article} with neurips/IEEE standard packages and a ${project.methodology_style} research tone.\n\n` +
-        `REQUIRED EXTENSIVE STRUCTURE & DEPTH (APPROX 3,500+ WORDS):\n` +
-        `- ALWAYS START WITH: \\documentclass[11pt,a4paper]{article} \\usepackage[margin=1in]{geometry} \\usepackage{amsmath,amssymb,booktabs,graphicx,hyperref,microtype}\n` +
-        `- \\title{${idea.title}}\n` +
+        `- ALWAYS START WITH EXACTLY THIS PREAMBLE:\n` +
+        `  \\documentclass[11pt,a4paper]{article}\n` +
+        `  \\usepackage[margin=1in]{geometry}\n` +
+        `  \\usepackage{amsmath,amssymb,booktabs,graphicx,hyperref,microtype}\n` +
+        `  \\title{${idea.title}}\n` +
+        `  \\author{AI Research Division}\n` +
+        `  \\begin{document}\n` +
+        `  \\maketitle\n\n` +
         `- Abstract: Comprehensive 250-300 word summary of problem, theoretical motivation, sandboxed empirical methodology, key quantitative findings, and broader impact.\n` +
         `- Section 1: Introduction (Exhaustive 4-paragraph background, problem formalization, key challenges, and explicit bulleted list of 3 major contributions).\n` +
         `- Section 2: Related Work & Conceptual Lineage (Extensive 5-paragraph literature synthesis categorizing provided sources into taxonomy, cite with \\cite{}).\n` +
@@ -808,6 +813,7 @@ export async function paperImpl(db: DB, userId: string, projectId: string) {
         `- Section 6: Discussion, Ablation Studies & Limitations (Critical evaluation of failures, computational trade-offs, and edge cases).\n` +
         `- Section 7: Conclusion & Future Work (Key takeaways and concrete future extensions).\n` +
         `- \\begin{thebibliography} block constructed strictly from provided sources\n` +
+        `- ALWAYS END THE PAPER WITH: \\end{document}\n` +
         writingStyleDirective +
         `\n\n` +
         `PROMPT & FORMULATION:\n${(draft?.content ?? "").slice(0, 5000)}\n\n` +
