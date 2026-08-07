@@ -526,7 +526,7 @@ async function executeVersion(
   const version = (last?.version ?? 0) + 1;
 
   // 1. Send the code to our real Python FastAPI backend for E2B execution and Groq evaluation!
-  const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
+  const backendUrl = getBackendUrl();
   const res = await fetch(`${backendUrl}/api/execute`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -777,7 +777,7 @@ export async function paperImpl(db: DB, userId: string, projectId: string) {
   // Run plagiarism check via Python backend with 12s fast timeout
   let plagiarismResult: Record<string, unknown> = {};
   try {
-    const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
+    const backendUrl = getBackendUrl();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 35000);
     const plagRes = await fetch(`${backendUrl}/api/plagiarism`, {
@@ -817,7 +817,7 @@ export async function runPlagiarismCheckImpl(db: DB, userId: string, projectId: 
   const paper = artifacts?.[0];
   if (!paper) throw new Error("Generate a paper first.");
 
-  const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
+  const backendUrl = getBackendUrl();
   const plagRes = await fetch(`${backendUrl}/api/plagiarism`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
