@@ -442,12 +442,23 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         "Translate this approved pseudocode into a single runnable Python file. " +
         "CRITICAL INSTRUCTIONS TO PREVENT HALLUCINATION: " +
         "1. DO NOT include `subprocess.run` or `pip install` in generated code.\n" +
-        "2. ROBUST DATASET GENERATION & PREPROCESSING:\n" +
-        "   - DO NOT use `import kaggle` or external API calls for datasets.\n" +
-        "   - ALWAYS generate realistic benchmark data dynamically using `from sklearn.datasets import make_classification, make_regression, load_breast_cancer, load_iris` or `numpy.random` with a fixed seed (`random_state=42`).\n" +
-        "   - Target column: Select target label column (e.g., 'Class', 'target', 'label', or integer `y`).\n" +
-        "   - Force label encoding: ALWAYS encode target labels using `from sklearn.preprocessing import LabelEncoder; y = LabelEncoder().fit_transform(y.astype(str))` to guarantee clean integer classes (0, 1, 2...).\n" +
-        "   - Split & Scale: Use `train_test_split(X, y, test_size=0.2, random_state=42)` then scale features with `StandardScaler` (`scaler.fit_transform(X_train)`, `scaler.transform(X_test)`).\n" +
+        "2. AUTHENTIC KAGGLE DATASET DOWNLOAD (REAL DATA ONLY — NO SYNTHETIC DATASETS ALLOWED):\n" +
+        "   - Search and download real authentic Kaggle datasets matching the research prompt using the Kaggle API:\n" +
+        "     ```python\n" +
+        "     import kaggle, glob, pandas as pd\n" +
+        "     search_terms = '...' # 2-3 relevant keywords from research topic\n" +
+        "     found = kaggle.api.dataset_list(search=search_terms, sort_by='hottest')\n" +
+        "     dataset_ref = found[0].ref if found else 'sulianov/heart-failure-clinical-data'\n" +
+        "     kaggle.api.dataset_download_cli(dataset_ref, unzip=True)\n" +
+        "     csv_files = glob.glob('**/*.csv', recursive=True)\n" +
+        "     df = pd.read_csv(csv_files[0])\n" +
+        "     ```\n" +
+        "3. ROBUST REAL DATA PREPROCESSING:\n" +
+        "   - Drop non-predictive ID/Image columns (`drop_cols = [c for c in ['id', 'ID', 'Image', 'filename'] if c in df.columns]; df = df.drop(columns=drop_cols)`).\n" +
+        "   - Drop nulls (`df = df.dropna()`).\n" +
+        "   - Encode target labels (`from sklearn.preprocessing import LabelEncoder; y = LabelEncoder().fit_transform(df[df.columns[-1]].astype(str))`).\n" +
+        "   - Select numeric features (`X = df.drop(columns=[df.columns[-1]]).select_dtypes(include='number')`).\n" +
+        "   - Train/test split & scale (`train_test_split(X, y, test_size=0.2, random_state=42)` then `StandardScaler`).\n" +
         "5. DO NOT hardcode the final metrics. You MUST dynamically compute them using `sklearn.metrics` (accuracy, precision, recall, f1) on your actual model's predictions. " +
         "6. DYNAMIC DATA-DRIVEN MODEL SELECTION (DO NOT HARDCODE A SINGLE MODEL FAMILY BLINDLY):\n" +
         "   - Choose between `RandomForestClassifier`, `GradientBoostingClassifier`, `MLPClassifier`, `SVC`, or `PyTorch CPU` (`import torch`).\n" +
