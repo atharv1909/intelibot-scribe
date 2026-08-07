@@ -8,13 +8,13 @@ import type { Database, Json } from "@/integrations/supabase/types";
 export type DB = SupabaseClient<Database>;
 
 export function getBackendUrl(): string {
-  if (process.env.PYTHON_BACKEND_URL) return process.env.PYTHON_BACKEND_URL;
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
-    const u = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (process.env["PYTHON_BACKEND_URL"]) return process.env["PYTHON_BACKEND_URL"];
+  if (process.env["VERCEL_PROJECT_PRODUCTION_URL"]) {
+    const u = process.env["VERCEL_PROJECT_PRODUCTION_URL"];
     return u.startsWith("http") ? u : `https://${u}`;
   }
-  if (process.env.VERCEL_URL) {
-    const u = process.env.VERCEL_URL;
+  if (process.env["VERCEL_URL"]) {
+    const u = process.env["VERCEL_URL"];
     return u.startsWith("http") ? u : `https://${u}`;
   }
   return "http://localhost:8000";
@@ -774,22 +774,33 @@ export async function paperImpl(db: DB, userId: string, projectId: string) {
     },
   ]);
 
-  // Run plagiarism check via Python backend with 12s fast timeout
+  // Run plagiarism check directly from Node.js with 12s fast timeout
   let plagiarismResult: Record<string, unknown> = {};
   try {
-    const backendUrl = getBackendUrl();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 35000);
-    const plagRes = await fetch(`${backendUrl}/api/plagiarism`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    if (plagRes.ok) {
-      const plagJson = await plagRes.json();
-      plagiarismResult = plagJson.data ?? {};
+    const apiKey = process.env["WINSTON_AI_API_KEY"] || process.env["GOWINSTON_API_KEY"];
+    if (apiKey) {
+      let cleanText = text.replace(/\\[a-zA-Z]+\{[^}]*\}/g, "").replace(/\\[a-zA-Z]+/g, "").replace(/[{}]/g, "").replace(/\s+/g, " ").trim();
+      const words = cleanText.split(" ");
+      if (words.length > 500) cleanText = words.slice(0, 500).join(" ");
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
+      const plagRes = await fetch("https://api.gowinston.ai/v2/plagiarism", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ text: cleanText, language: "en" }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (plagRes.ok) {
+        const plagJson = await plagRes.json();
+        const result = plagJson.result || {};
+        plagiarismResult = {
+          success: true,
+          score: result.score ?? plagJson.score ?? 0,
+          sources: plagJson.sources || result.sources || [],
+        };
+      }
     }
   } catch (e) {
     console.warn("Fast plagiarism check skipped or timed out; can be triggered manually:", e);
@@ -817,16 +828,48 @@ export async function runPlagiarismCheckImpl(db: DB, userId: string, projectId: 
   const paper = artifacts?.[0];
   if (!paper) throw new Error("Generate a paper first.");
 
-  const backendUrl = getBackendUrl();
-  const plagRes = await fetch(`${backendUrl}/api/plagiarism`, {
+  const apiKey = process.env["WINSTON_AI_API_KEY"] || process.env["GOWINSTON_API_KEY"];
+  if (!apiKey) {
+    throw new Error("GoWinston API key not configured in Vercel.");
+  }
+
+  // Strip LaTeX for accurate checking and limit to 500 words to save credits
+  let cleanText = paper.content.replace(/\\[a-zA-Z]+\{[^}]*\}/g, "");
+  cleanText = cleanText.replace(/\\[a-zA-Z]+/g, "");
+  cleanText = cleanText.replace(/[{}]/g, "");
+  cleanText = cleanText.replace(/\s+/g, " ").trim();
+  const words = cleanText.split(" ");
+  if (words.length > 500) {
+    cleanText = words.slice(0, 500).join(" ");
+  }
+
+  const plagRes = await fetch("https://api.gowinston.ai/v2/plagiarism", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: paper.content }),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ text: cleanText, language: "en" }),
   });
 
-  if (!plagRes.ok) throw new Error(`Plagiarism service error (${plagRes.status})`);
+  if (!plagRes.ok) {
+    if (plagRes.status === 403) throw new Error("GoWinston credit limit reached.");
+    if (plagRes.status === 429) throw new Error("GoWinston rate limit reached.");
+    if (plagRes.status === 401) throw new Error("GoWinston API key is invalid.");
+    throw new Error(`Plagiarism service error (${plagRes.status})`);
+  }
+
   const plagJson = await plagRes.json();
-  const plagiarismResult = plagJson.data ?? {};
+  const result = plagJson.result || {};
+  const score = result.score ?? plagJson.score ?? 0;
+  const sources = plagJson.sources || result.sources || [];
+
+  const plagiarismResult = {
+    success: true,
+    score,
+    sources,
+    credits_remaining: plagJson.credits_remaining,
+  };
 
   const existingMeta = typeof paper.meta === "object" && paper.meta !== null ? paper.meta : {};
   const meta = { ...existingMeta, plagiarism: plagiarismResult };
