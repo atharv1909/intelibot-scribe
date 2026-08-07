@@ -71,6 +71,37 @@ function AuthPage() {
     }
   }
 
+  async function onDemoSignIn() {
+    setBusy(true);
+    const demoEmail = "demo@intelibot.ai";
+    const demoPassword = "DemoUser123!";
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: demoEmail,
+        password: demoPassword,
+      });
+      if (signInError) {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: demoEmail,
+          password: demoPassword,
+          options: { data: { display_name: "Demo Researcher" } },
+        });
+        if (signUpError) throw signUpError;
+        const { error: retryError } = await supabase.auth.signInWithPassword({
+          email: demoEmail,
+          password: demoPassword,
+        });
+        if (retryError) throw retryError;
+      }
+      toast.success("Signed in as Demo Researcher!");
+      void navigate({ to: target });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Quick sign in failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onGoogle() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -79,13 +110,13 @@ function AuthPage() {
       });
       if (error) {
         if (error.message?.includes("not enabled") || error.message?.includes("validation_failed")) {
-          toast.error("Google sign-in is not enabled in Supabase yet. Please sign in with Email/Password below!");
+          toast.error("Google sign-in is not enabled in Supabase yet. Try 1-Click Quick Sign In below!");
         } else {
           toast.error(error.message || "Google sign-in failed");
         }
       }
     } catch {
-      toast.error("Please sign in with Email & Password below!");
+      toast.error("Try 1-Click Quick Sign In below!");
     }
   }
 
@@ -97,6 +128,23 @@ function AuthPage() {
         <p className="mt-2 text-sm text-muted-foreground">
           Governed research runs with human approval gates at every irreversible step.
         </p>
+
+        <div className="mt-6">
+          <Button
+            type="button"
+            className="w-full bg-emerald-600 font-semibold text-white hover:bg-emerald-700 dark:bg-emerald-5-500"
+            disabled={busy}
+            onClick={onDemoSignIn}
+          >
+            ⚡ 1-Click Quick Sign In (Demo Mode)
+          </Button>
+        </div>
+
+        <div className="my-5 flex items-center gap-3">
+          <span className="h-px flex-1 bg-border" />
+          <span className="rule-label">or custom sign in</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
 
         <form onSubmit={onSubmit} className="mt-7 space-y-4">
           {mode === "signup" && (
