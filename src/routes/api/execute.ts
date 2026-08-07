@@ -32,10 +32,15 @@ export const Route = createFileRoute("/api/execute")({
             cleanCode = cleanCode.replace(/^```(?:python)?\n?/i, "").replace(/\n?```$/i, "").trim();
           }
 
+          // Read Kaggle credentials from Vercel environment variables if available
+          const kaggleKey = process.env.KAGGLE_API_KEY || process.env.KAGGLE_KEY || "88888888888888888888888888888888";
+          const kaggleUser = process.env.KAGGLE_USERNAME || "intelibot_sandbox";
+
           // Auto-install missing packages in container if referenced
           const autoInstallHeader = `import subprocess, sys, os\n` +
-            `os.environ.setdefault("KAGGLE_USERNAME", "intelibot_sandbox")\n` +
-            `os.environ.setdefault("KAGGLE_KEY", "88888888888888888888888888888888")\n` +
+            `os.environ["KAGGLE_USERNAME"] = "${kaggleUser}"\n` +
+            `os.environ["KAGGLE_KEY"] = "${kaggleKey}"\n` +
+            `os.environ["KAGGLE_API_KEY"] = "${kaggleKey}"\n` +
             `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy'), ('xgboost', 'xgboost'), ('scipy', 'scipy')]:\n` +
             `    try:\n` +
             `        __import__(_mod)\n` +
