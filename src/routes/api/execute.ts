@@ -25,7 +25,12 @@ export const Route = createFileRoute("/api/execute")({
 
           // Clean code fences if present
           let cleanCode = code.trim();
-          cleanCode = cleanCode.replace(/^```(?:python)?\n?/i, "").replace(/\n?```$/i, "");
+          const matchCode = cleanCode.match(/```(?:python)?\s*\n([\s\S]*?)\n```/i);
+          if (matchCode) {
+            cleanCode = matchCode[1].trim();
+          } else {
+            cleanCode = cleanCode.replace(/^```(?:python)?\n?/i, "").replace(/\n?```$/i, "").trim();
+          }
 
           // 1. Provision live E2B Sandbox using official SDK
           const sbx = await Sandbox.create({ apiKey: e2bKey });

@@ -457,7 +457,11 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
     },
   ]);
 
-  const artifact = await saveArtifact(db, userId, projectId, "code", text, { language: "python" });
+  let rawText = text.trim();
+  const codeFenceMatch = rawText.match(/```(?:python)?\s*\n([\s\S]*?)\n```/i);
+  const cleanCodeText = codeFenceMatch ? codeFenceMatch[1].trim() : rawText.replace(/^```(?:python)?\n?/i, "").replace(/\n?```$/i, "").trim();
+
+  const artifact = await saveArtifact(db, userId, projectId, "code", cleanCodeText, { language: "python" });
   await log(db, userId, projectId, STAGE.code, `Implementation v${artifact.version} generated`, {
     actor: "codegen-agent",
   });
