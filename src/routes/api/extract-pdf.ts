@@ -1,6 +1,6 @@
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 
-export const APIRoute = createAPIFileRoute("/api/extract-pdf")({
+export const Route = createAPIFileRoute("/api/extract-pdf")({
   POST: async ({ request }) => {
     try {
       const formData = await request.formData();

@@ -1,6 +1,6 @@
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 
-export const APIRoute = createAPIFileRoute("/api/execute")({
+export const Route = createAPIFileRoute("/api/execute")({
   POST: async ({ request }) => {
     try {
       const body = await request.json();
