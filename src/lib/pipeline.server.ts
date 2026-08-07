@@ -761,10 +761,16 @@ export async function paperImpl(db: DB, userId: string, projectId: string) {
     },
   ]);
 
+function getBackendUrl(): string {
+  if (process.env.PYTHON_BACKEND_URL) return process.env.PYTHON_BACKEND_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:8000";
+}
+
   // Run plagiarism check via Python backend with 12s fast timeout
   let plagiarismResult: Record<string, unknown> = {};
   try {
-    const backendUrl = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
+    const backendUrl = getBackendUrl();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 35000);
     const plagRes = await fetch(`${backendUrl}/api/plagiarism`, {
