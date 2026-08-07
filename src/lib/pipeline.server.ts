@@ -525,35 +525,76 @@ async function executeVersion(
     .maybeSingle();
   const version = (last?.version ?? 0) + 1;
 
-  // 1. Send the code to our /api/execute endpoint for real E2B sandbox execution!
-  const backendUrl = getBackendUrl();
-  const res = await fetch(`${backendUrl}/api/execute`, {
+  const e2bKey = process.env.E2B_API_KEY || "";
+  if (!e2bKey) {
+    throw new Error("E2B_API_KEY is not set in Vercel Environment Variables — cannot execute E2B sandbox");
+  }
+
+  // 1. Provision E2B Cloud Sandbox Container directly from Vercel Node SSR
+  const e2bRes = await fetch("https://api.e2b.dev/sandboxes", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      project_id: projectId,
-      user_id: userId,
-      code: code.content,
-      config: opts.config,
-      label: opts.label,
-      architecture_change: opts.architecture_change
-    })
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": e2bKey,
+    },
+    body: JSON.stringify({ template: "base" }),
   });
 
-  const contentType = res.headers.get("content-type") || "";
-  if (!res.ok) {
-    const errBody = contentType.includes("application/json") 
-      ? await res.json() 
-      : { error: await res.text().catch(() => res.statusText) };
-    throw new Error(`E2B Sandbox execution failed (${res.status}): ${errBody.error || errBody.message || JSON.stringify(errBody)}`);
+  if (!e2bRes.ok) {
+    const errText = await e2bRes.text().catch(() => e2bRes.statusText);
+    throw new Error(`Failed to provision E2B sandbox container (${e2bRes.status}): ${errText}`);
   }
 
-  const json = await res.json();
-  if (json.status !== "success" || !json.data) {
-    throw new Error(`E2B Sandbox error: ${json.error || json.message || "Unknown error"}`);
-  }
+  const sbx = await e2bRes.json();
+  const sbxId = sbx.sandboxID;
+  let pyResult: any = null;
 
-  const pyResult = json.data;
+  try {
+    // 2. Execute Python code inside E2B Sandbox container
+    const execRes = await fetch(`https://api.e2b.dev/sandboxes/${sbxId}/commands`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": e2bKey,
+      },
+      body: JSON.stringify({
+        cmd: `python3 -c ${JSON.stringify(code.content)}`,
+      }),
+    });
+
+    if (!execRes.ok) {
+      const errText = await execRes.text().catch(() => execRes.statusText);
+      throw new Error(`E2B container command execution failed (${execRes.status}): ${errText}`);
+    }
+
+    const execData = await execRes.json();
+    const stdout = execData.stdout || "";
+    const stderr = execData.stderr || "";
+
+    const match = stdout.match(/RESULT_JSON:(\{.*\})/);
+    if (!match) {
+      throw new Error(`Training script did not emit RESULT_JSON in stdout. Container stdout: ${stdout.slice(0, 300)} | stderr: ${stderr.slice(0, 300)}`);
+    }
+
+    const metrics = JSON.parse(match[1]);
+    const score = Number(metrics.accuracy ?? metrics.f1_score ?? 0);
+    const verdict = score >= 0.90 ? "good" : "bad";
+
+    pyResult = {
+      metrics,
+      score,
+      verdict,
+      analysis: `Evaluated run (${opts.label}) from live E2B container (${sbxId}).`,
+      stdout,
+      stderr,
+    };
+  } finally {
+    // 3. Cleanup E2B container session
+    await fetch(`https://api.e2b.dev/sandboxes/${sbxId}`, {
+      method: "DELETE",
+      headers: { "X-API-Key": e2bKey },
+    }).catch(() => {});
+  }
 
   const { data: created, error } = await db
     .from("experiment_versions")
