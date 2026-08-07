@@ -439,33 +439,22 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
     {
       role: "user",
       content:
-        "Translate this approved pseudocode into a single runnable Python file. " +
-        "CRITICAL INSTRUCTIONS TO PREVENT HALLUCINATION: " +
-        "1. DO NOT include `subprocess.run` or `pip install` in generated code.\n" +
-        "2. AUTHENTIC KAGGLE DATASET DOWNLOAD (REAL DATA ONLY — NO SYNTHETIC DATASETS ALLOWED):\n" +
-        "   - Search and download real authentic Kaggle datasets matching the research prompt using the Kaggle API:\n" +
-        "     ```python\n" +
-        "     import kaggle, glob, pandas as pd\n" +
-        "     search_terms = '...' # 2-3 relevant keywords from research topic\n" +
-        "     found = kaggle.api.dataset_list(search=search_terms, sort_by='hottest')\n" +
-        "     dataset_ref = found[0].ref if found else 'sulianov/heart-failure-clinical-data'\n" +
-        "     kaggle.api.dataset_download_cli(dataset_ref, unzip=True)\n" +
-        "     csv_files = glob.glob('**/*.csv', recursive=True)\n" +
-        "     df = pd.read_csv(csv_files[0])\n" +
-        "     ```\n" +
-        "3. ROBUST REAL DATA PREPROCESSING:\n" +
-        "   - Drop non-predictive ID/Image columns (`drop_cols = [c for c in ['id', 'ID', 'Image', 'filename'] if c in df.columns]; df = df.drop(columns=drop_cols)`).\n" +
-        "   - Drop nulls (`df = df.dropna()`).\n" +
-        "   - Encode target labels (`from sklearn.preprocessing import LabelEncoder; y = LabelEncoder().fit_transform(df[df.columns[-1]].astype(str))`).\n" +
-        "   - Select numeric features (`X = df.drop(columns=[df.columns[-1]]).select_dtypes(include='number')`).\n" +
-        "   - Train/test split & scale (`train_test_split(X, y, test_size=0.2, random_state=42)` then `StandardScaler`).\n" +
-        "5. DO NOT hardcode the final metrics. You MUST dynamically compute them using `sklearn.metrics` (accuracy, precision, recall, f1) on your actual model's predictions. " +
-        "6. DYNAMIC DATA-DRIVEN MODEL SELECTION (DO NOT HARDCODE A SINGLE MODEL FAMILY BLINDLY):\n" +
-        "   - Choose between `RandomForestClassifier`, `GradientBoostingClassifier`, `MLPClassifier`, `SVC`, or `PyTorch CPU` (`import torch`).\n" +
-        "   - DO NOT use tensorflow or keras (573MB, exceeds disk space). Use PyTorch CPU (`import torch`) or scikit-learn algorithms.\n" +
-        "7. MANDATORY OUTPUT FORMAT: At the very end of your script, compute real evaluation metrics using scikit-learn (accuracy, precision, recall, f1_score) and print:\n" +
+        "Translate the approved pseudocode below into a complete, executable Python script.\n" +
+        "CRITICAL INSTRUCTIONS FOR FAITHFUL IMPLEMENTATION:\n" +
+        "1. EXACT ALGORITHM FIDELITY (MANDATORY):\n" +
+        "   - You MUST faithfully implement the exact functions, classes, data structures, and algorithms defined in the pseudocode.\n" +
+        "   - DO NOT replace or overwrite the pseudocode's algorithm with an unrelated Kaggle dataset or generic classification script.\n" +
+        "   - If the pseudocode describes Neural Networks, LLM Quantization (PTQ/QAT), Transformers, Graph Neural Networks, or Custom Algorithms, implement them using PyTorch CPU (`import torch`, `import torch.nn as nn`) or Scikit-learn.\n" +
+        "2. DATA & EVALUATION:\n" +
+        "   - Use authentic real-world data relevant to the algorithm, or create realistic benchmark evaluation datasets matching the input specifications in the pseudocode.\n" +
+        "   - If downloading a dataset from Kaggle, search ONLY for datasets specifically matching the exact domain of the pseudocode topic.\n" +
+        "3. NO HARDCODING & REAL METRIC COMPUTATION:\n" +
+        "   - DO NOT hardcode result metrics. Compute actual accuracy, precision, recall, and f1_score from your model's real predictions.\n" +
+        "4. MANDATORY OUTPUT FORMAT:\n" +
+        "   - At the end of the script, output the real evaluated metrics as a single line:\n" +
         "   `import json; print('RESULT_JSON:' + json.dumps({'accuracy': float(accuracy), 'precision': float(precision), 'recall': float(recall), 'f1_score': float(f1_score)}))`\n\n" +
-        "Ensure deterministic seed, and return pure code only.\n\n" +
+        "Return pure runnable Python code only inside ```python ... ``` fences.\n\n" +
+        "[APPROVED PSEUDOCODE TO TRANSLATE]\n" +
         pseudo.content.slice(0, 9000),
     },
   ]);
