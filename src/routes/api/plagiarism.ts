@@ -6,7 +6,7 @@ export const Route = createFileRoute("/api/plagiarism")({
       POST: async ({ request }) => {
         try {
           const body = await request.json();
-          const apiKey = process.env.GOWINSTON_API_KEY || "";
+          const apiKey = process.env.WINSTON_AI_API_KEY || process.env.GOWINSTON_API_KEY || "";
           const text = (body.text || "").replace(/\\[a-zA-Z]+\{[^}]*\}/g, "").slice(0, 2500);
 
           if (apiKey && text) {

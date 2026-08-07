@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-GOWINSTON_API_KEY = os.getenv("GOWINSTON_API_KEY")
+GOWINSTON_API_KEY = os.getenv("WINSTON_AI_API_KEY") or os.getenv("GOWINSTON_API_KEY")
 GOWINSTON_URL = "https://api.gowinston.ai/v2/plagiarism"
 
 
