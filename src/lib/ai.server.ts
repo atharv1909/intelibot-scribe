@@ -4,8 +4,8 @@ export const DEFAULT_MODEL = "llama-3.3-70b-versatile";
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 function apiKey(): string {
-  const key = process.env["GROQ_API_KEY"] || "";
-  if (!key) throw new Error("AI is not configured for this workspace (Missing GROQ_API_KEY).");
+  const key = process.env["GROQ_API_KEY"] || process.env["VITE_GROQ_API_KEY"] || "";
+  if (!key) throw new Error("AI is not configured for this workspace. Please set GROQ_API_KEY in Vercel Environment Variables.");
   return key;
 }
 

@@ -27,7 +27,7 @@ export const createRun = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z
       .object({
-        prompt: z.string().min(8).max(4000),
+        prompt: z.string().min(3).max(4000),
         mode: z.enum(["vague", "detailed"]),
         methodology_style: z.enum(["defensive", "vague", "assertive", "replication"]),
         latex_template: z.enum(["neurips", "ieee", "acl", "elsevier"]),
