@@ -57,14 +57,24 @@ async def extract_pdf(file: UploadFile = File(...)):
     import fitz  # PyMuPDF
     
     contents = await file.read()
-    doc = fitz.open(stream=contents, filetype="pdf")
-    
-    all_lines = []
-    for page in doc:
-        text = page.get_text()
-        lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 40]
-        all_lines.extend(lines)
-    doc.close()
+    try:
+        import fitz
+        doc = fitz.open(stream=contents, filetype="pdf")
+        all_lines = []
+        for page in doc:
+            text = page.get_text()
+            lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 40]
+            all_lines.extend(lines)
+        doc.close()
+    except Exception:
+        import io
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(contents))
+        all_lines = []
+        for page in reader.pages:
+            text = page.extract_text() or ""
+            lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 40]
+            all_lines.extend(lines)
     
     # Sample ~30-40 representative lines evenly from the document
     total = len(all_lines)

@@ -1,14 +1,11 @@
 import os
 import json
 import logging
+import requests
 from typing import Dict, Any, Optional
 
-import google.generativeai as genai
 from groq import Groq
 from pydantic import BaseModel
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -19,8 +16,6 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 GROQ_MODEL = "llama-3.3-70b-versatile"
 GROQ_FALLBACK_MODEL = "llama-3.1-8b-instant"
@@ -66,23 +61,22 @@ def call_llm(prompt: str, system_prompt: str = "", require_json: bool = False, j
             
             if not GEMINI_API_KEY:
                 raise ValueError("Gemini API key not configured for fallback")
-                
-            model = genai.GenerativeModel(
-                model_name=GEMINI_MODEL,
-                system_instruction=system_prompt if system_prompt else None,
-            )
-            
-            generation_config = genai.types.GenerationConfig()
+
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}]
+            }
+            if system_prompt:
+                payload["system_instruction"] = {"parts": [{"text": system_prompt}]}
             if require_json:
-                generation_config.response_mime_type = "application/json"
-                if json_schema:
-                    generation_config.response_schema = json_schema
-                    
-            response = model.generate_content(
-                prompt,
-                generation_config=generation_config
-            )
-            return response.text
+                payload["generationConfig"] = {"responseMimeType": "application/json"}
+
+            g_res = requests.post(url, json=payload, timeout=60)
+            if not g_res.ok:
+                raise ValueError(f"Gemini API error ({g_res.status_code}): {g_res.text}")
+            
+            g_json = g_res.json()
+            return g_json["candidates"][0]["content"]["parts"][0]["text"]
 
 def extract_json(raw: str) -> dict:
     """Safely extracts JSON from an LLM response even if fenced in markdown."""
