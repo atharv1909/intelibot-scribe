@@ -52,7 +52,7 @@ export const Route = createFileRoute("/api/execute")({
             `        res = subprocess.run(cmd, capture_output=True, text=True)\n` +
             `        if res.returncode != 0:\n` +
             `            raise RuntimeError(f"CONTAINER_PIP_INSTALL_FAILED ({pkg}): " + res.stderr[-2000:])\n\n` +
-            `for _p, _m in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy'), ('xgboost', 'xgboost'), ('scipy', 'scipy')]:\n` +
+            `for _p, _m in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy'), ('xgboost', 'xgboost'), ('scipy', 'scipy'), ('transformers', 'transformers')]:\n` +
             `    _ensure_pkg(_p, _m)\n\n` +
             `_ensure_pkg('torch', 'torch', ['--index-url', 'https://download.pytorch.org/whl/cpu'])\n\n`;
 
