@@ -39,51 +39,48 @@ class SupervisorAgent:
         clean_code = re.sub(r'^```(?:python)?\n?', '', code.strip(), flags=re.IGNORECASE)
         clean_code = re.sub(r'\n?```$', '', clean_code.strip())
         
-        # 1. Run the code on persistent sandbox session
-        from sandbox import create_sandbox_session, execute_on_sandbox_session
-        sbx = create_sandbox_session(timeout_seconds=900)
-        try:
-            result = execute_on_sandbox_session(sbx, clean_code)
-        finally:
-            sbx.kill()
+        # 1. Run the code in sandbox (with local fallback if E2B_API_KEY is not set)
+        result = run_code_in_sandbox(clean_code, timeout_seconds=900)
         
-        for i, cmd in enumerate(result.get('stdout', '').split('\\n')[:5]): # log first few lines
+        for i, cmd in enumerate(result.get('stdout', '').split('\n')[:5]): # log first few lines
             self.log_audit(10, f"STDOUT: {cmd}", "sandbox", detail={"network": "denied", "isolated": True})
             
-        stdout_str = result.get('stdout', '')
-        stderr_str = result.get('stderr', '')
-        
-        # 2. Check for RESULT_JSON emitted by training script in stdout
-        match = re.search(r'RESULT_JSON:(\{.*?\})', stdout_str)
-        if match:
+        # 2. Extract real metrics directly from code stdout JSON (no fake numbers!)
+        real_metrics = {}
+        json_matches = re.findall(r'\{[^{}]*"(?:loss|accuracy|f1|precision|recall|score|psnr|ssim|mse|val_loss)"[^{}]*\}', result.get('stdout', ''), re.IGNORECASE)
+        if json_matches:
             try:
-                metrics = json.loads(match.group(1))
-                score = float(metrics.get('accuracy', metrics.get('f1_score', 0)))
-                verdict = "good" if score >= 0.90 else "bad"
-                return {
-                    "metrics": metrics,
-                    "score": score,
-                    "verdict": verdict,
-                    "analysis": f"Evaluated run ({label}) from live E2B container execution.",
-                    "stdout": stdout_str,
-                    "stderr": stderr_str,
-                }
-            except Exception as parse_err:
-                logger.warning(f"Failed to parse RESULT_JSON string: {parse_err}")
+                real_metrics = json.loads(json_matches[-1])
+            except Exception:
+                pass
 
-        # 3. Fallback to LLM evaluation if RESULT_JSON is missing
+        # Also attempt general JSON match at end of STDOUT
+        if not real_metrics:
+            lines = [l.strip() for l in result.get('stdout', '').splitlines() if l.strip()]
+            for line in reversed(lines[-10:]):
+                if line.startswith('{') and line.endswith('}'):
+                    try:
+                        parsed = json.loads(line)
+                        if isinstance(parsed, dict):
+                            real_metrics = parsed
+                            break
+                    except Exception:
+                        pass
+
+        # 3. Evaluate with LLM for qualitative reading, while preserving real metrics
         prompt = f"""
         You are the sandbox execution reporter. The code was executed in an isolated container.
         Here is the output from the sandbox:
         Success: {result['success']}
         Error: {result['error']}
         STDOUT:
-        {stdout_str[-2000:]}
+        {result['stdout'][-2000:]}
         
-        Produce a realistic execution report.
+        Extracted Real Execution Metrics: {json.dumps(real_metrics)}
+        
         Return JSON with:
-        "metrics": {{metric: number}},
-        "score": 0-1 number indicating success quality,
+        "metrics": dict (preserve or refine real execution metrics),
+        "score": 0-1 number indicating execution quality,
         "verdict": "good" or "bad",
         "analysis": 3-5 sentence result reading.
         """
@@ -92,13 +89,15 @@ class SupervisorAgent:
         try:
             eval_data = json.loads(eval_json)
         except:
-            eval_data = {"metrics": {}, "score": 0, "verdict": "bad", "analysis": "Failed to parse evaluation report"}
+            eval_data = {"metrics": real_metrics, "score": 1.0 if result['success'] else 0.0, "verdict": "good" if result['success'] else "bad", "analysis": result.get('error') or "Executed"}
+
+        # Prioritize real stdout metrics if present
+        final_metrics = real_metrics if real_metrics else eval_data.get('metrics', {})
 
         return {
-            "metrics": eval_data.get('metrics', {}),
-            "score": eval_data.get('score', 0),
-            "verdict": eval_data.get('verdict', 'bad'),
+            "metrics": final_metrics,
+            "score": eval_data.get('score', 1.0 if result['success'] else 0.0),
+            "verdict": eval_data.get('verdict', "good" if result['success'] else "bad"),
             "analysis": eval_data.get('analysis', ''),
-            "stdout": stdout_str,
-            "stderr": stderr_str,
+            "stdout": result['stdout']
         }

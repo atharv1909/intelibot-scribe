@@ -1,13 +1,6 @@
 import os
 import logging
-try:
-    from e2b_code_interpreter import Sandbox
-except Exception:
-    try:
-        from e2b import Sandbox
-    except Exception:
-        Sandbox = None
-
+from e2b_code_interpreter import Sandbox
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -75,7 +68,7 @@ def create_sandbox_session(timeout_seconds: int = 900) -> Sandbox:
     logger.info("Provisioning persistent E2B Sandbox...")
     return Sandbox.create(
         timeout=timeout_seconds,
-        envs={"KAGGLE_API_TOKEN": os.getenv("KAGGLE_API_TOKEN", "")}
+        envs={"KAGGLE_API_TOKEN": os.getenv("KAGGLE_API_TOKEN", os.getenv("KAGGLE_API_KEY", ""))}
     )
 
 def execute_on_sandbox_session(sbx: Sandbox, python_code: str) -> dict:
@@ -95,23 +88,35 @@ def execute_on_sandbox_session(sbx: Sandbox, python_code: str) -> dict:
 
 def run_code_in_sandbox(python_code: str, timeout_seconds: int = 900) -> dict:
     """
-    Executes Python code in a secure E2B sandbox.
-    Returns stdout, stderr, and error message.
+    Executes Python code in a secure real E2B cloud sandbox session using E2B_API_KEY.
+    Returns stdout, stderr, and execution status.
     """
+    api_key = os.getenv("E2B_API_KEY")
+    if not api_key:
+        raise ValueError("E2B_API_KEY is not configured in .env file. E2B cloud sandbox is required.")
+
     sbx = None
     try:
-        sbx = create_sandbox_session(timeout_seconds)
+        logger.info("Creating real E2B cloud sandbox instance...")
+        sbx = Sandbox.create(
+            api_key=api_key,
+            timeout=timeout_seconds,
+            envs={"KAGGLE_API_TOKEN": os.getenv("KAGGLE_API_TOKEN", os.getenv("KAGGLE_API_KEY", ""))}
+        )
         res = execute_on_sandbox_session(sbx, python_code)
         return res
     except Exception as e:
-        logger.error(f"Sandbox execution failed: {e}")
+        logger.error(f"E2B Cloud Sandbox execution failed: {e}")
         return {
             "success": False,
             "stdout": "",
-            "stderr": "",
+            "stderr": str(e),
             "error": str(e),
             "results": []
         }
     finally:
         if sbx:
-            sbx.kill()
+            try:
+                sbx.kill()
+            except Exception:
+                pass
