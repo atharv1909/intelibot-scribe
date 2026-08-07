@@ -36,29 +36,25 @@ export const Route = createFileRoute("/api/execute")({
           const kaggleKey = process.env.KAGGLE_API_KEY || process.env.KAGGLE_KEY || "88888888888888888888888888888888";
           const kaggleUser = process.env.KAGGLE_USERNAME || "intelibot_sandbox";
 
-          // Auto-install missing packages in container if referenced
+          // Auto-install missing packages in container if referenced (loud-failing, no silent swallows)
           const autoInstallHeader = `import subprocess, sys, os\n` +
             `os.environ["KAGGLE_USERNAME"] = "${kaggleUser}"\n` +
             `os.environ["KAGGLE_KEY"] = "${kaggleKey}"\n` +
-            `os.environ["KAGGLE_API_KEY"] = "${kaggleKey}"\n` +
-            `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy'), ('xgboost', 'xgboost'), ('scipy', 'scipy')]:\n` +
+            `os.environ["KAGGLE_API_KEY"] = "${kaggleKey}"\n\n` +
+            `def _ensure_pkg(pkg, mod=None, extra=None):\n` +
+            `    mod_name = mod or pkg\n` +
             `    try:\n` +
-            `        __import__(_mod)\n` +
+            `        __import__(mod_name)\n` +
             `    except ImportError:\n` +
-            `        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', _pkg])\n` +
-            `try:\n` +
-            `    import torch\n` +
-            `except ImportError:\n` +
-            `    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', 'torch', '--index-url', 'https://download.pytorch.org/whl/cpu'])\n` +
-            `try:\n` +
-            `    import torch, torch.nn as _nn\n` +
-            `    _orig_trans_fwd = _nn.Transformer.forward\n` +
-            `    def _patched_trans_fwd(self, src, tgt=None, *args, **kwargs):\n` +
-            `        if tgt is None: tgt = src\n` +
-            `        return _orig_trans_fwd(self, src, tgt, *args, **kwargs)\n` +
-            `    _nn.Transformer.forward = _patched_trans_fwd\n` +
-            `except Exception:\n` +
-            `    pass\n\n`;
+            `        cmd = [sys.executable, '-m', 'pip', 'install', '-q', '--no-cache-dir', pkg]\n` +
+            `        if extra:\n` +
+            `            cmd.extend(extra)\n` +
+            `        res = subprocess.run(cmd, capture_output=True, text=True)\n` +
+            `        if res.returncode != 0:\n` +
+            `            raise RuntimeError(f"CONTAINER_PIP_INSTALL_FAILED ({pkg}): " + res.stderr[-2000:])\n\n` +
+            `for _p, _m in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy'), ('xgboost', 'xgboost'), ('scipy', 'scipy')]:\n` +
+            `    _ensure_pkg(_p, _m)\n\n` +
+            `_ensure_pkg('torch', 'torch', ['--index-url', 'https://download.pytorch.org/whl/cpu'])\n\n`;
 
           const codeToRun = autoInstallHeader + cleanCode;
 
