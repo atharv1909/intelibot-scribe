@@ -14,6 +14,7 @@ import {
   pseudocodeImpl,
   rerunImpl,
   reviewArtifactImpl,
+  runPlagiarismCheckImpl,
   runResearchImpl,
   selectIdeaImpl,
   surfaceIdeasImpl,
