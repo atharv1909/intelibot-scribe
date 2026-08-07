@@ -13,6 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedMemoryRouteImport } from './routes/_authenticated/memory'
+import { Route as ApiExecuteRouteImport } from './routes/api/execute'
+import { Route as ApiExtractPdfRouteImport } from './routes/api/extract-pdf'
+import { Route as ApiPlagiarismRouteImport } from './routes/api/plagiarism'
 import { Route as AuthenticatedRunsIndexRouteImport } from './routes/_authenticated/runs.index'
 import { Route as AuthenticatedRunsIdRouteImport } from './routes/_authenticated/runs.$id'
 
@@ -35,6 +38,21 @@ const AuthenticatedMemoryRoute = AuthenticatedMemoryRouteImport.update({
   path: '/memory',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiExecuteRoute = ApiExecuteRouteImport.update({
+  id: '/api/execute',
+  path: '/api/execute',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiExtractPdfRoute = ApiExtractPdfRouteImport.update({
+  id: '/api/extract-pdf',
+  path: '/api/extract-pdf',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPlagiarismRoute = ApiPlagiarismRouteImport.update({
+  id: '/api/plagiarism',
+  path: '/api/plagiarism',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedRunsIndexRoute = AuthenticatedRunsIndexRouteImport.update({
   id: '/runs/',
   path: '/runs/',
@@ -50,6 +68,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/memory': typeof AuthenticatedMemoryRoute
+  '/api/execute': typeof ApiExecuteRoute
+  '/api/extract-pdf': typeof ApiExtractPdfRoute
+  '/api/plagiarism': typeof ApiPlagiarismRoute
   '/runs/$id': typeof AuthenticatedRunsIdRoute
   '/runs/': typeof AuthenticatedRunsIndexRoute
 }
@@ -57,6 +78,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/memory': typeof AuthenticatedMemoryRoute
+  '/api/execute': typeof ApiExecuteRoute
+  '/api/extract-pdf': typeof ApiExtractPdfRoute
+  '/api/plagiarism': typeof ApiPlagiarismRoute
   '/runs/$id': typeof AuthenticatedRunsIdRoute
   '/runs': typeof AuthenticatedRunsIndexRoute
 }
@@ -66,20 +90,42 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/memory': typeof AuthenticatedMemoryRoute
+  '/api/execute': typeof ApiExecuteRoute
+  '/api/extract-pdf': typeof ApiExtractPdfRoute
+  '/api/plagiarism': typeof ApiPlagiarismRoute
   '/_authenticated/runs/$id': typeof AuthenticatedRunsIdRoute
   '/_authenticated/runs/': typeof AuthenticatedRunsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/memory' | '/runs/$id' | '/runs/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/memory'
+    | '/api/execute'
+    | '/api/extract-pdf'
+    | '/api/plagiarism'
+    | '/runs/$id'
+    | '/runs/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/memory' | '/runs/$id' | '/runs'
+  to:
+    | '/'
+    | '/auth'
+    | '/memory'
+    | '/api/execute'
+    | '/api/extract-pdf'
+    | '/api/plagiarism'
+    | '/runs/$id'
+    | '/runs'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/memory'
+    | '/api/execute'
+    | '/api/extract-pdf'
+    | '/api/plagiarism'
     | '/_authenticated/runs/$id'
     | '/_authenticated/runs/'
   fileRoutesById: FileRoutesById
@@ -88,6 +134,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiExecuteRoute: typeof ApiExecuteRoute
+  ApiExtractPdfRoute: typeof ApiExtractPdfRoute
+  ApiPlagiarismRoute: typeof ApiPlagiarismRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -119,6 +168,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/memory'
       preLoaderRoute: typeof AuthenticatedMemoryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/execute': {
+      id: '/api/execute'
+      path: '/api/execute'
+      fullPath: '/api/execute'
+      preLoaderRoute: typeof ApiExecuteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/extract-pdf': {
+      id: '/api/extract-pdf'
+      path: '/api/extract-pdf'
+      fullPath: '/api/extract-pdf'
+      preLoaderRoute: typeof ApiExtractPdfRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/plagiarism': {
+      id: '/api/plagiarism'
+      path: '/api/plagiarism'
+      fullPath: '/api/plagiarism'
+      preLoaderRoute: typeof ApiPlagiarismRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/runs/': {
       id: '/_authenticated/runs/'
@@ -156,6 +226,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiExecuteRoute: ApiExecuteRoute,
+  ApiExtractPdfRoute: ApiExtractPdfRoute,
+  ApiPlagiarismRoute: ApiPlagiarismRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
