@@ -439,26 +439,19 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
     {
       role: "user",
       content:
-        "Translate the approved pseudocode below into a complete, executable Python script.\n" +
-        "CRITICAL INSTRUCTIONS FOR FAITHFUL IMPLEMENTATION:\n" +
-        "1. EXACT ALGORITHM FIDELITY (MANDATORY):\n" +
-        "   - You MUST faithfully implement the exact functions, classes, data structures, and algorithms defined in the pseudocode.\n" +
-        "   - DO NOT replace or overwrite the pseudocode's algorithm with an unrelated Kaggle dataset or generic classification script.\n" +
-        "   - If the pseudocode describes Neural Networks, LLM Quantization (PTQ/QAT), Transformers, Graph Neural Networks, or Custom Algorithms, implement them using PyTorch CPU (`import torch`, `import torch.nn as nn`) or Scikit-learn.\n" +
-        "2. DATA & EVALUATION:\n" +
-        "   - Use authentic real-world data relevant to the algorithm, or create realistic benchmark evaluation datasets matching the input specifications in the pseudocode.\n" +
-        "   - If downloading a dataset from Kaggle, search ONLY for datasets specifically matching the exact domain of the pseudocode topic.\n" +
-        "3. AUTHENTIC PYTORCH TRANSFORMER ARCHITECTURE & REAL TRAINING LOOPS:\n" +
-        "   - Single-Input Tasks (Forecasting, Classification, Representation, Regression): DO NOT use `nn.Transformer` (which is an encoder-decoder requiring 2 inputs). Use `nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=model_size, nhead=8, batch_first=True), num_layers=2)` so `forward(x)` takes a single input tensor `x` cleanly.\n" +
-        "   - TENSOR DIMENSION MATCHING: When using `nn.TransformerEncoderLayer(d_model=d_model, nhead=...)`, ensure input tensor feature dimension matches `d_model`. If input feature dimension `input_dim != d_model`, project input features using `x = nn.Linear(input_dim, d_model)(x)` inside `forward(x)` before passing `x` to `TransformerEncoder(x)`.\n" +
-        "   - Sequence-to-Sequence (Seq2Seq / Autoregressive): If using `nn.Transformer(src, tgt)`, `tgt` MUST be a real shifted target sequence constructed from actual labeled data (`tgt_input = y[:, :-1, :]`). Never copy `src` or pass synthetic placeholders.\n" +
-        "   - Set `batch_first=True` on all TransformerEncoderLayer and TransformerDecoderLayer definitions for optimal PyTorch performance.\n" +
-        "   - MANDATORY PYTORCH TRAINING LOOP: You MUST include an actual PyTorch model training loop (`model.train()`, `optimizer.zero_grad()`, `loss = criterion(output, target)`, `loss.backward()`, `optimizer.step()`) across epochs before evaluating with `model.eval()` and `torch.no_grad()`. DO NOT evaluate a randomly initialized model inside `torch.no_grad()` without training first!\n" +
-        "   - MODERN PYTORCH 2.X QUANTIZATION SYNTAX: Use `torch.ao.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)` or `torch.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)`. DO NOT reference deprecated/non-existent attributes like `torch.quantization.RoundingMode`.\n" +
-        "4. NO HARDCODING & REAL METRIC COMPUTATION:\n" +
-        "   - DO NOT hardcode result metrics. Compute actual accuracy, precision, recall, and f1_score from your trained model's real predictions.\n" +
-        "5. MANDATORY OUTPUT FORMAT:\n" +
-        "   - At the end of the script, output the real evaluated metrics as a single line:\n" +
+        "Translate the approved pseudocode below into a clean, robust, executable Python script.\n" +
+        "REQUIREMENTS FOR STANDARDIZED IMPLEMENTATION:\n" +
+        "1. STRICT ALGORITHM FIDELITY:\n" +
+        "   - Implement the exact functions, classes, and algorithms specified in the pseudocode using standard public PyTorch CPU (`import torch`, `import torch.nn as nn`) or Scikit-learn.\n" +
+        "   - Use ONLY standard, official PyTorch APIs. DO NOT invent non-existent module attributes (e.g. do NOT use `torch.quantization.RoundingMode`) or unauthenticated HuggingFace Hub downloads.\n" +
+        "2. CLEAN PYTORCH MODEL DESIGN:\n" +
+        "   - For single-input models, use `nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=d_model, nhead=8, batch_first=True), num_layers=2)`.\n" +
+        "   - If input dimension `input_dim != d_model`, project input features using `self.input_proj = nn.Linear(input_dim, d_model)` in `__init__` and `x = self.input_proj(x)` in `forward(x)`.\n" +
+        "   - For dynamic quantization, use standard `torch.quantization.quantize_dynamic(model, {nn.Linear}, dtype=torch.qint8)`.\n" +
+        "3. REAL TRAINING & EVALUATION LOOPS:\n" +
+        "   - Include an authentic PyTorch training loop (`model.train()`, `optimizer.zero_grad()`, `loss = criterion(output, target)`, `loss.backward()`, `optimizer.step()`) across training epochs before calling `model.eval()` and `torch.no_grad()` for evaluation.\n" +
+        "4. MANDATORY OUTPUT FORMAT:\n" +
+        "   - Compute actual accuracy, precision, recall, and f1_score from your trained model's real predictions and print as a single final line:\n" +
         "   `import json; print('RESULT_JSON:' + json.dumps({'accuracy': float(accuracy), 'precision': float(precision), 'recall': float(recall), 'f1_score': float(f1_score)}))`\n\n" +
         "Return pure runnable Python code only inside ```python ... ``` fences.\n\n" +
         "[APPROVED PSEUDOCODE TO TRANSLATE]\n" +
