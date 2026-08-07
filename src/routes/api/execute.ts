@@ -41,7 +41,7 @@ export const Route = createFileRoute("/api/execute")({
             `os.environ["KAGGLE_USERNAME"] = "${kaggleUser}"\n` +
             `os.environ["KAGGLE_KEY"] = "${kaggleKey}"\n` +
             `os.environ["KAGGLE_API_KEY"] = "${kaggleKey}"\n` +
-            `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy'), ('xgboost', 'xgboost'), ('scipy', 'scipy')]:\n` +
+            `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy'), ('xgboost', 'xgboost'), ('scipy', 'scipy'), ('torch', 'torch')]:\n` +
             `    try:\n` +
             `        __import__(_mod)\n` +
             `    except ImportError:\n` +
