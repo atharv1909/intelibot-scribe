@@ -454,6 +454,7 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         "   - Sequence-to-Sequence (Seq2Seq / Autoregressive): If using `nn.Transformer(src, tgt)`, `tgt` MUST be a real shifted target sequence constructed from actual labeled data (`tgt_input = y[:, :-1, :]`). Never copy `src` or pass synthetic placeholders.\n" +
         "   - Set `batch_first=True` on all TransformerEncoderLayer and TransformerDecoderLayer definitions for optimal PyTorch performance.\n" +
         "   - MANDATORY PYTORCH TRAINING LOOP: You MUST include an actual PyTorch model training loop (`model.train()`, `optimizer.zero_grad()`, `loss = criterion(output, target)`, `loss.backward()`, `optimizer.step()`) across epochs before evaluating with `model.eval()` and `torch.no_grad()`. DO NOT evaluate a randomly initialized model inside `torch.no_grad()` without training first!\n" +
+        "   - MODERN PYTORCH 2.X QUANTIZATION SYNTAX: Use `torch.ao.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)` or `torch.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)`. DO NOT reference deprecated/non-existent attributes like `torch.quantization.RoundingMode`.\n" +
         "4. NO HARDCODING & REAL METRIC COMPUTATION:\n" +
         "   - DO NOT hardcode result metrics. Compute actual accuracy, precision, recall, and f1_score from your trained model's real predictions.\n" +
         "5. MANDATORY OUTPUT FORMAT:\n" +
