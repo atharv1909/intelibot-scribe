@@ -40,6 +40,8 @@ class PlagiarismRequest(BaseModel):
     text: str
 
 @app.post("/api/execute")
+@app.post("/execute")
+@app.post("/api/py/execute")
 async def execute_code(req: ExecuteRequest):
     agent = SupervisorAgent(req.project_id, req.user_id)
     result = agent.execute_and_evaluate(
@@ -51,6 +53,8 @@ async def execute_code(req: ExecuteRequest):
     return {"status": "success", "data": result}
 
 @app.post("/api/plagiarism")
+@app.post("/plagiarism")
+@app.post("/api/py/plagiarism")
 async def plagiarism_check(req: PlagiarismRequest):
     """Run plagiarism detection via GoWinston AI."""
     try:
@@ -68,6 +72,8 @@ async def plagiarism_check(req: PlagiarismRequest):
         }
 
 @app.post("/api/extract-pdf")
+@app.post("/extract-pdf")
+@app.post("/api/py/extract-pdf")
 async def extract_pdf(file: UploadFile = File(...)):
     """Extract representative writing style lines from an uploaded PDF."""
     contents = await file.read()
