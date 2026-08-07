@@ -1,31 +1,16 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/index.py",
-      "use": "@vercel/python"
+      "source": "/api/plagiarism",
+      "destination": "/api/index.py"
     },
     {
-      "src": "package.json",
-      "use": "@vercel/vite"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/plagiarism",
-      "dest": "api/index.py"
+      "source": "/api/extract-pdf",
+      "destination": "/api/index.py"
     },
     {
-      "src": "/api/extract-pdf",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/api/py/(.*)",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
+      "source": "/api/py/(.*)",
+      "destination": "/api/index.py"
     }
   ]
 }
