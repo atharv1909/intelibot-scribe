@@ -116,7 +116,15 @@ async def extract_pdf(file: UploadFile = File(...)):
     if not all_lines:
         import re
         raw_strings = re.findall(r'[\x20-\x7E]{6,}', contents.decode('latin1', errors='ignore'))
-        all_lines = [s.strip() for s in raw_strings if len(s.strip()) > 15 and not s.startswith('/')][:50]
+        all_lines = [
+            s.strip() for s in raw_strings 
+            if len(s.strip()) > 15 
+            and not s.startswith('/')
+            and not s.startswith('<<')
+            and not s.startswith('>>')
+            and 'ObjStm' not in s
+            and 'FlateDecode' not in s
+        ][:50]
 
     # Sample representative lines evenly from document
     total = len(all_lines)
