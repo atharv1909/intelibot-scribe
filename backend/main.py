@@ -4,9 +4,14 @@ import uvicorn
 import asyncio
 from pydantic import BaseModel
 
-from database import init_db, get_connection
-from supervisor import SupervisorAgent
-from plagiarism import check_plagiarism
+try:
+    from backend.database import init_db, get_connection
+    from backend.supervisor import SupervisorAgent
+    from backend.plagiarism import check_plagiarism
+except ModuleNotFoundError:
+    from database import init_db, get_connection
+    from supervisor import SupervisorAgent
+    from plagiarism import check_plagiarism
 
 app = FastAPI(title="Intelibot Scribe Backend")
 

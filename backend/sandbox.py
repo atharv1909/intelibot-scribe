@@ -1,6 +1,13 @@
 import os
 import logging
-from e2b_code_interpreter import Sandbox
+try:
+    from e2b_code_interpreter import Sandbox
+except Exception:
+    try:
+        from e2b import Sandbox
+    except Exception:
+        Sandbox = None
+
 from dotenv import load_dotenv
 
 load_dotenv()
