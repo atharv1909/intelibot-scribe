@@ -1,8 +1,13 @@
 import sqlite3
 import json
+import os
+import tempfile
 from typing import Any
 
-DB_PATH = "intelibot.db"
+if os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+    DB_PATH = os.path.join(tempfile.gettempdir(), "intelibot.db")
+else:
+    DB_PATH = "intelibot.db"
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)

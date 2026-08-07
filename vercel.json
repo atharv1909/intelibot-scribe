@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/execute",
+      "destination": "/api/index.py"
+    },
+    {
       "source": "/api/plagiarism",
       "destination": "/api/index.py"
     },
