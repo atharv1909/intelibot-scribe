@@ -537,7 +537,7 @@ async function executeVersion(
       "Content-Type": "application/json",
       "X-API-Key": e2bKey,
     },
-    body: JSON.stringify({ template: "base" }),
+    body: JSON.stringify({ templateID: "base" }),
   });
 
   if (!e2bRes.ok) {
