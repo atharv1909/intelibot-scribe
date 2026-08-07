@@ -33,8 +33,10 @@ export const Route = createFileRoute("/api/execute")({
           }
 
           // Auto-install missing packages in container if referenced
-          const autoInstallHeader = `import subprocess, sys\n` +
-            `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('pandas', 'pandas'), ('numpy', 'numpy')]:\n` +
+          const autoInstallHeader = `import subprocess, sys, os\n` +
+            `os.environ.setdefault("KAGGLE_USERNAME", "intelibot_sandbox")\n` +
+            `os.environ.setdefault("KAGGLE_KEY", "88888888888888888888888888888888")\n` +
+            `for _pkg, _mod in [('scikit-learn', 'sklearn'), ('kaggle', 'kaggle'), ('pandas', 'pandas'), ('numpy', 'numpy'), ('xgboost', 'xgboost'), ('scipy', 'scipy')]:\n` +
             `    try:\n` +
             `        __import__(_mod)\n` +
             `    except ImportError:\n` +
