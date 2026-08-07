@@ -32,6 +32,12 @@ export const Route = createFileRoute("/api/execute")({
             cleanCode = cleanCode.replace(/^```(?:python)?\n?/i, "").replace(/\n?```$/i, "").trim();
           }
 
+          // Transform single-input nn.Transformer calls to PyTorch nn.TransformerEncoder to fix missing 'tgt' argument
+          cleanCode = cleanCode.replace(
+            /nn\.Transformer\s*\(\s*d_model=([^,]+),\s*nhead=([^,]+)[^\)]*\)/g,
+            "nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=$1, nhead=$2, batch_first=True), num_layers=2)"
+          );
+
           // Read Kaggle credentials from Vercel environment variables if available
           const kaggleKey = process.env.KAGGLE_API_KEY || process.env.KAGGLE_KEY || "88888888888888888888888888888888";
           const kaggleUser = process.env.KAGGLE_USERNAME || "intelibot_sandbox";
