@@ -6,6 +6,7 @@ import { retrieveSources, scanForInjection } from "./research.server.js";
 import { generateIdeaGraphImpl } from "./idea-graph.server.js";
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
 export type DB = SupabaseClient<any>;
 
 export async function getAuthenticatedContext(req?: any) {
@@ -669,7 +670,8 @@ async function executeVersion(
           KAGGLE_USERNAME: process.env["KAGGLE_USERNAME"] || "",
           KAGGLE_KEY: process.env["KAGGLE_KEY"] || process.env["KAGGLE_API_KEY"] || "",
         },
-        timeoutMs: 300000,
+        // Sandbox session lifetime. Must be >= the runCode timeout below.
+        timeoutMs: 280_000,
       });
 
       const autoInstallHeader = `import subprocess, sys, os
@@ -714,7 +716,9 @@ if _kkey:
 `;
 
       const codeToRun = `${autoInstallHeader}\n\n${cleanCode}`;
-      const execution = await sbx.runCode(codeToRun);
+      // Leaves ~40s of headroom inside Vercel's 300s function limit for the
+      // post-execution AI evaluation call and DB writes below.
+      const execution = await sbx.runCode(codeToRun, { timeoutMs: 260_000 });
       stdout = (execution.logs.stdout || []).join("\n");
       stderr = (execution.logs.stderr || []).join("\n");
       if (execution.error) {
@@ -763,7 +767,8 @@ if _kkey:
 
   let realMetrics: Record<string, number> = {};
   const jsonMatches = stdout.match(/\{[^{}]*"(?:loss|accuracy|f1|precision|recall|score|psnr|ssim|mse|val_loss)"[^{}]*\}/gi);
-  if (jsonMatches && jsonMatches.length > 0) {
+  const lastJsonMatch = jsonMatches?.[jsonMatches.length - 1];
+  if (lastJsonMatch) {
     try {
       const matchStr = jsonMatches[jsonMatches.length - 1];
       if (matchStr) realMetrics = JSON.parse(matchStr);
@@ -1280,7 +1285,11 @@ export async function handlePipelineAction(payload: any, req?: any) {
     case "select":
       return selectIdeaImpl(supabase, userId, data);
     case "ideaGraph":
+<<<<<<< HEAD
       return generateIdeaGraphForProjectImpl(supabase, userId, data.projectId);
+=======
+      return ideaGraphImpl(supabase, userId, data.projectId);
+>>>>>>> 2bc06224f2ffdc5a9c9341499537497acfe07790
     case "formulate":
       return formulateImpl(supabase, userId, data.projectId);
     case "pseudocode":

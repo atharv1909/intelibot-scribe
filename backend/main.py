@@ -208,15 +208,17 @@ async def plagiarism_check(req: PlagiarismRequest):
         result = check_plagiarism(req.text)
         return {"status": "success" if result.get("success") else "error", "data": result}
     except Exception as e:
-        print(f"Plagiarism check error: {e}")
-        return {
-            "status": "success",
-            "data": {
-                "success": True,
-                "score": 0.02,
-                "sources": [],
-            }
-        }
+    print(f"Plagiarism check error: {e}")
+
+    return {
+        "status": "error",
+        "data": {
+            "success": False,
+            "error": str(e),
+            "score": None,
+            "sources": [],
+        },
+    }
 
 @app.post("/api/extract-pdf")
 @app.post("/extract-pdf")

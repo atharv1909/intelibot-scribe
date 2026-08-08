@@ -44,7 +44,7 @@ async function apiCall(action: string, data: any) {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ action, ...data }),
+    body: JSON.stringify({ action, data }),
   });
 
   const text = await res.text();

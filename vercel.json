@@ -1,7 +1,10 @@
 {
   "functions": {
+    "api/**/*.py": {
+      "maxDuration": 300
+    },
     "api/**/*.ts": {
-      "includeFiles": "src/**"
+      "maxDuration": 300
     }
   }
 }
