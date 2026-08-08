@@ -649,19 +649,17 @@ for _mod, _pip in _NEEDED_PACKAGES.items():
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", _pip], check=False)
 
 _kkey = os.environ.get("KAGGLE_KEY") or os.environ.get("KAGGLE_API_TOKEN") or os.environ.get("KAGGLE_API_KEY")
-_kuser = os.environ.get("KAGGLE_USERNAME", "")
+_kuser = os.environ.get("KAGGLE_USERNAME") or "atharv0919"
 if _kkey:
     os.environ["KAGGLE_KEY"] = _kkey
     os.environ["KAGGLE_API_TOKEN"] = _kkey
+    os.environ["KAGGLE_USERNAME"] = _kuser
     try:
         import json, pathlib
         kdir = pathlib.Path.home() / ".kaggle"
         kdir.mkdir(parents=True, exist_ok=True)
         kfile = kdir / "kaggle.json"
-        config_data = {"token": _kkey, "key": _kkey}
-        if _kuser:
-            config_data["username"] = _kuser
-        kfile.write_text(json.dumps(config_data))
+        kfile.write_text(json.dumps({"username": _kuser, "key": _kkey, "token": _kkey}))
         os.chmod(kfile, 0o600)
     except Exception:
         pass
