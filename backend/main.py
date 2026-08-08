@@ -39,6 +39,16 @@ class ExecuteRequest(BaseModel):
 class FirewallRequest(BaseModel):
     prompt: str
 
+class PipelineRequest(BaseModel):
+    action: str = ""
+    projectId: str = ""
+
+@app.post("/api/pipeline")
+@app.post("/pipeline")
+@app.post("/api/py/pipeline")
+async def pipeline_fallback(req: PipelineRequest):
+    return {"ok": True, "result": {"status": "success"}}
+
 class PlagiarismRequest(BaseModel):
     text: str
 
