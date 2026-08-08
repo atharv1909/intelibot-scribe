@@ -470,11 +470,39 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `       \`for u in urls:\` \`try: df = pd.read_csv(u); break\` \`except Exception: pass\`\n` +
         `   - CATEGORY B: Theoretical AI, Custom Latent Embeddings, Novel Math Operators, or Synthetic Latent Spaces (Where No Kaggle Dataset Exists):\n` +
         `     * Synthesize clean, structured PyTorch tensors (e.g. \`embeddings = torch.randn(250, 512)\`) that directly represent the theoretical embedding/latent space.\n\n` +
-        `3. BULLETPROOF DATA LOADING & PREPROCESSING:\n` +
-        `   - Import \`glob\` and dynamically discover downloaded CSV files if available: \`csv_files = glob.glob("./data/**/*.csv", recursive=True)\`; if \`csv_files\`, load \`df = pd.read_csv(csv_files[0])\`.\n` +
-        `   - Dynamically identify numeric feature columns and target label column without hardcoding fixed names:\n` +
-        `     \`num_cols = df.select_dtypes(include=[np.number]).columns.tolist()\`; \`target_col = 'target' if 'target' in num_cols else ('output' if 'output' in num_cols else num_cols[-1])\`.\n` +
-        `   - Convert features & labels cleanly into float32 PyTorch tensors: \`X = df[[c for c in num_cols if c != target_col]].fillna(0).values.astype(np.float32)\`.\n\n` +
+        `3. BULLETPROOF DATA ACQUISITION & NULL-SAFE PREPROCESSING:\n` +
+        `   - Write strict, defensive Python dataset acquisition logic exactly following this structure:\n` +
+        `     \`\`\`python\n` +
+        `     df = None\n` +
+        `     try:\n` +
+        `         kaggle.api.dataset_download_files("rashikrahmanpritom/heart-attack-analysis-prediction-dataset", path="./data", unzip=True)\n` +
+        `         csv_files = glob.glob("./data/**/*.csv", recursive=True)\n` +
+        `         if csv_files:\n` +
+        `             df = pd.read_csv(csv_files[0])\n` +
+        `     except Exception:\n` +
+        `         pass\n` +
+        `     if df is None or len(df) == 0:\n` +
+        `         urls = [\n` +
+        `             "https://raw.githubusercontent.com/datasets/heart-disease/main/data/heart-disease.csv",\n` +
+        `             "https://raw.githubusercontent.com/selva86/datasets/master/HeartDisease.csv"\n` +
+        `         ]\n` +
+        `         for u in urls:\n` +
+        `             try:\n` +
+        `                 df = pd.read_csv(u)\n` +
+        `                 if df is not None and len(df) > 0:\n` +
+        `                     break\n` +
+        `             except Exception:\n` +
+        `                 continue\n` +
+        `     if df is None or len(df) == 0:\n` +
+        `         raise RuntimeError("Failed to acquire dataset from Kaggle or public fallbacks")\n` +
+        `     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()\n` +
+        `     target_col = 'target' if 'target' in num_cols else ('output' if 'output' in num_cols else num_cols[-1])\n` +
+        `     feature_cols = [c for c in num_cols if c != target_col]\n` +
+        `     X = df[feature_cols].fillna(0).values.astype(np.float32)\n` +
+        `     y = df[target_col].fillna(0).values.astype(np.int64)\n` +
+        `     \`\`\`\n` +
+        `   - CRITICAL: NEVER use \`pd.number\` (which is invalid). ALWAYS use \`np.number\`.\n` +
+        `   - CRITICAL: NEVER call \`df.select_dtypes\` without verifying \`df is not None and len(df) > 0\` first.\n\n` +
         `4. REAL MODEL TRAINING & REAL COMPUTED METRICS:\n` +
         `   - Implement a complete PyTorch model (\`nn.Module\`), training loop (e.g. 5 epochs), and test evaluation pass.\n` +
         `   - At the very end of execution, compute actual test loss and test accuracy from the model evaluation pass and print directly to STDOUT as JSON:\n` +
