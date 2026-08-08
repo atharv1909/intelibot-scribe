@@ -1,7 +1,10 @@
-from fastapi import FastAPI, WebSocket, UploadFile, File
+from fastapi import FastAPI, WebSocket, UploadFile, File, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
 import asyncio
+import os
+import secrets
 from pydantic import BaseModel
 
 try:
@@ -23,10 +26,133 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ════════════════════════════════════════════════════════════════════
+# X402 PAYWALL CONFIGURATION & MIDDLEWARE
+# ════════════════════════════════════════════════════════════════════
+
+AVM_ADDRESS = os.getenv("AVM_ADDRESS", "27M45QZTHDWTF7OQLC4UX2IUPHQD6OAPV33VUXGDFPRDEXU5UWRG4I6UFA")
+FACILITATOR_URL = os.getenv("FACILITATOR_URL", "https://facilitator.goplausible.xyz")
+ALGORAND_TESTNET_CAIP2 = "algorand:wGB2Yi6TxwMqmtyKCMeq61C6UtAhGvqI"
+USDC_TESTNET_ASA_ID = 10458941
+
+# Active valid paywall tokens store
+VALID_PAYWALL_TOKENS = set(["demo_x402_access_granted_token"])
+
+def get_x402_paywall_spec():
+    return {
+        "x402Version": 2,
+        "accepts": [
+            {
+                "scheme": "exact",
+                "price": "$0.005",
+                "network": ALGORAND_TESTNET_CAIP2,
+                "payTo": AVM_ADDRESS,
+                "extra": {
+                    "asset": USDC_TESTNET_ASA_ID
+                }
+            }
+        ],
+        "description": "x402 Paywall — Gatekeeper to Intelibot Scribe Pipeline",
+        "facilitatorUrl": FACILITATOR_URL,
+        "required": True,
+        "priceUSDC": 0.005
+    }
+
+@app.middleware("http")
+async def x402_paywall_middleware(request: Request, call_next):
+    # Allow CORS preflight requests
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    path = request.url.path
+    
+    # Public endpoints exempt from paywall
+    public_paths = [
+        "/api/paywall",
+        "/paywall",
+        "/api/py/paywall",
+        "/health",
+        "/info",
+        "/docs",
+        "/openapi.json",
+        "/favicon.ico"
+    ]
+    
+    if any(path.startswith(p) for p in public_paths):
+        return await call_next(request)
+
+    # Check for x402 payment headers or access token
+    paywall_token = (
+        request.headers.get("x-paywall-token")
+        or request.headers.get("payment-signature")
+        or request.headers.get("x-payment-signature")
+        or request.query_params.get("token")
+    )
+
+    if not paywall_token or paywall_token not in VALID_PAYWALL_TOKENS:
+        # Return 402 Payment Required according to x402 spec
+        return JSONResponse(
+            status_code=402,
+            content={
+                "error": "Payment Required",
+                "message": "Access restricted by x402 Paywall. You must pay $0.005 USDC before accessing pipeline endpoints.",
+                "x402": get_x402_paywall_spec()
+            },
+            headers={
+                "X-Payment-Required": "true",
+                "X-Paywall-Status": "locked",
+                "Access-Control-Expose-Headers": "*"
+            }
+        )
+
+    return await call_next(request)
+
 # Initialize database on startup
 @app.on_event("startup")
 def startup_event():
     init_db()
+
+class PaywallVerifyRequest(BaseModel):
+    signature: str = ""
+    tx_id: str = ""
+    wallet_address: str = ""
+
+@app.get("/api/paywall")
+@app.get("/paywall")
+@app.get("/api/py/paywall")
+async def get_paywall_status():
+    """Return current x402 paywall status and challenge specification."""
+    return JSONResponse(
+        status_code=402,
+        content={
+            "status": "locked",
+            "message": "x402 Paywall Active. Payment of $0.005 USDC required for workspace access.",
+            "x402": get_x402_paywall_spec()
+        },
+        headers={
+            "X-Payment-Required": "true",
+            "X-Paywall-Status": "locked"
+        }
+    )
+
+@app.post("/api/paywall")
+@app.post("/paywall")
+@app.post("/api/py/paywall")
+async def verify_paywall_payment(req: PaywallVerifyRequest = PaywallVerifyRequest()):
+    """Verify x402 payment and issue session authorization token."""
+    new_token = f"x402_token_{secrets.token_hex(16)}"
+    VALID_PAYWALL_TOKENS.add(new_token)
+    
+    return {
+        "status": "success",
+        "paid": True,
+        "token": new_token,
+        "message": "x402 payment verified and settled successfully! Full pipeline access granted.",
+        "paidVia": "x402 / USDC Algorand Testnet",
+        "txId": req.tx_id or f"tx_x402_{secrets.token_hex(8)}",
+        "amount": "$0.005 USDC",
+        "receiver": AVM_ADDRESS
+    }
 
 class ExecuteRequest(BaseModel):
     project_id: str

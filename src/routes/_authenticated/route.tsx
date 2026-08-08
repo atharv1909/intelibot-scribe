@@ -1,5 +1,6 @@
 import { Link, Outlet, createFileRoute, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { ShieldCheck, Lock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -13,17 +14,29 @@ function AuthenticatedLayout() {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [paywallUnlocked, setPaywallUnlocked] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // 1. Verify User Auth Session
     if (!loading && !session) {
       void navigate({ to: "/auth", search: { next: pathname } });
+      return;
+    }
+
+    // 2. Verify x402 Paywall Settlement Token
+    const paywallToken = localStorage.getItem("x402_paywall_token");
+    if (!loading && session && !paywallToken) {
+      setPaywallUnlocked(false);
+      void navigate({ to: "/paywall", search: { next: pathname } });
+    } else if (paywallToken) {
+      setPaywallUnlocked(true);
     }
   }, [loading, session, navigate, pathname]);
 
-  if (loading || !session) {
+  if (loading || !session || paywallUnlocked === false) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="rule-label">Verifying session…</p>
+        <p className="rule-label">Verifying session & x402 paywall authorization…</p>
       </div>
     );
   }
@@ -42,6 +55,10 @@ function AuthenticatedLayout() {
             <Link to="/memory" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">
               Strategic memory
             </Link>
+            <Link to="/paywall" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground flex items-center gap-1.5 text-xs font-mono bg-emerald-500/10 text-emerald-500 px-2.5 py-1 rounded-full border border-emerald-500/20">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              x402 Unlocked ($0.005 USDC)
+            </Link>
           </nav>
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden text-xs text-muted-foreground sm:block">{session.user.email}</span>
@@ -49,6 +66,7 @@ function AuthenticatedLayout() {
               variant="ghost"
               size="sm"
               onClick={async () => {
+                localStorage.removeItem("x402_paywall_token");
                 await supabase.auth.signOut();
                 void navigate({ to: "/" });
               }}

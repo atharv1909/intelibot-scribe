@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Enhanced color grading for data displays */
+.mockup-code {
+  @apply bg-gradient-to-br from-slate-900 to-slate-800 !important;
+}
+
+/* Improved code text styling */
+pre code {
+  @apply text-emerald-300 font-mono text-sm leading-relaxed;
+}
+
+/* Alert styling with better contrast */
+.alert {
+  @apply rounded-lg shadow-md;
+}
+
+.alert-success {
+  @apply bg-gradient-to-r from-emerald-50 to-teal-50 border-l-4 border-emerald-500;
+}
+
+.alert-error {
+  @apply bg-gradient-to-r from-red-50 to-rose-50 border-l-4 border-red-500;
+}
+
+.alert-warning {
+  @apply bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500;
+}
+
+.alert-info {
+  @apply bg-gradient-to-r from-cyan-50 to-blue-50 border-l-4 border-cyan-500;
+}
+
+/* Enhanced card styling */
+.card {
+  @apply shadow-lg rounded-xl border border-gray-200/50;
+}
+
+/* Better visibility for data content */
+.card-body {
+  @apply p-6;
+}
+
+/* Text color improvements */
+.alert-success span {
+  @apply text-emerald-700 font-medium;
+}
+
+.alert-error span {
+  @apply text-red-700 font-medium;
+}
+
+.alert-warning span {
+  @apply text-amber-700 font-medium;
+}
+
+.alert-info span {
+  @apply text-cyan-700 font-medium;
+}
+

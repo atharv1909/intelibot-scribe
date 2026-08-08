@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as PaywallRouteImport } from './routes/paywall'
 import { Route as AuthenticatedMemoryRouteImport } from './routes/_authenticated/memory'
 import { Route as AuthenticatedRunsIndexRouteImport } from './routes/_authenticated/runs.index'
 import { Route as AuthenticatedRunsIdRouteImport } from './routes/_authenticated/runs.$id'
@@ -28,6 +29,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaywallRoute = PaywallRouteImport.update({
+  id: '/paywall',
+  path: '/paywall',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedMemoryRoute = AuthenticatedMemoryRouteImport.update({
@@ -49,6 +55,7 @@ const AuthenticatedRunsIdRoute = AuthenticatedRunsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/paywall': typeof PaywallRoute
   '/memory': typeof AuthenticatedMemoryRoute
   '/runs/$id': typeof AuthenticatedRunsIdRoute
   '/runs/': typeof AuthenticatedRunsIndexRoute
@@ -56,6 +63,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/paywall': typeof PaywallRoute
   '/memory': typeof AuthenticatedMemoryRoute
   '/runs/$id': typeof AuthenticatedRunsIdRoute
   '/runs': typeof AuthenticatedRunsIndexRoute
@@ -65,20 +73,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/paywall': typeof PaywallRoute
   '/_authenticated/memory': typeof AuthenticatedMemoryRoute
   '/_authenticated/runs/$id': typeof AuthenticatedRunsIdRoute
   '/_authenticated/runs/': typeof AuthenticatedRunsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/memory' | '/runs/$id' | '/runs/'
+  fullPaths: '/' | '/auth' | '/paywall' | '/memory' | '/runs/$id' | '/runs/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/memory' | '/runs/$id' | '/runs'
+  to: '/' | '/auth' | '/paywall' | '/memory' | '/runs/$id' | '/runs'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/paywall'
     | '/_authenticated/memory'
     | '/_authenticated/runs/$id'
     | '/_authenticated/runs/'
@@ -88,6 +98,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  PaywallRoute: typeof PaywallRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -111,6 +122,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/paywall': {
+      id: '/paywall'
+      path: '/paywall'
+      fullPath: '/paywall'
+      preLoaderRoute: typeof PaywallRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/memory': {
@@ -156,6 +174,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  PaywallRoute: PaywallRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

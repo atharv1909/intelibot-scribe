@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@supabase/supabase-js";
 
-import { FIREWALL_SYSTEM, askJson, askText, wrapUntrusted } from "./ai.server";
-import { retrieveSources, scanForInjection } from "./research.server";
-import { generateIdeaGraphImpl } from "./idea-graph.server";
+import { FIREWALL_SYSTEM, askJson, askText, wrapUntrusted } from "./ai.server.js";
+import { retrieveSources, scanForInjection } from "./research.server.js";
+import { generateIdeaGraphImpl } from "./idea-graph.server.js";
 
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 export type DB = SupabaseClient<any>;
 
 export async function getAuthenticatedContext(req?: any) {
@@ -102,7 +103,7 @@ async function log(
     event,
     actor: opts.actor ?? "system",
     severity: opts.severity ?? "info",
-    detail: opts.detail ?? ({} as Json),
+    detail: (opts.detail ?? {}) as any,
   });
 }
 
@@ -127,7 +128,7 @@ async function memoryContext(db: DB, userId: string) {
     .limit(8);
   if (!data?.length) return "No prior strategic memory.";
   return data
-    .map((m) => `- (${Number(m.weight).toFixed(2)}) ${m.title}: ${m.summary}${m.lesson ? ` | Lesson: ${m.lesson}` : ""}`)
+    .map((m: any) => `- (${Number(m.weight).toFixed(2)}) ${m.title}: ${m.summary}${m.lesson ? ` | Lesson: ${m.lesson}` : ""}`)
     .join("\n");
 }
 
@@ -221,8 +222,8 @@ export async function runResearchImpl(db: DB, userId: string, projectId: string)
   if (error) throw new Error(error.message);
 
   const passages = (inserted ?? [])
-    .filter((s) => s.abstract)
-    .map((s) => ({
+    .filter((s: any) => s.abstract)
+    .map((s: any) => ({
       project_id: projectId,
       user_id: userId,
       source_id: s.id,
@@ -231,8 +232,8 @@ export async function runResearchImpl(db: DB, userId: string, projectId: string)
     }));
   if (passages.length) await db.from("passages").insert(passages);
 
-  const flagged = (inserted ?? []).filter((s) => s.injection_flag);
-  for (const f of flagged) {
+  const flagged = (inserted ?? []).filter((s: any) => s.injection_flag);
+  for (const f of flagged as any[]) {
     await log(db, userId, projectId, STAGE.research, `Prompt-injection attempt flagged in "${f.title.slice(0, 70)}"`, {
       actor: "content-firewall",
       severity: "warn",
@@ -270,7 +271,7 @@ export async function surfaceIdeasImpl(db: DB, userId: string, projectId: string
   if (!sources?.length) throw new Error("Run the research phase first.");
 
   const corpus = sources
-    .map((s) => wrapUntrusted(`${s.title} (${s.year ?? "n.d."})`, s.abstract ?? ""))
+    .map((s: any) => wrapUntrusted(`${s.title} (${s.year ?? "n.d."})`, s.abstract ?? ""))
     .join("\n\n");
 
   const result = await askJson<{ items: IdeaOut[] }>(
@@ -302,7 +303,7 @@ export async function surfaceIdeasImpl(db: DB, userId: string, projectId: string
       rationale: i.rationale ?? "",
       feasibility: i.feasibility ?? "",
       requires_lab: Boolean(i.requires_lab),
-      source_ids: sources.map((s) => s.id),
+      source_ids: (sources as any[]).map((s) => s.id),
     })),
   );
 
@@ -391,11 +392,37 @@ async function saveArtifact(
   const version = (prev?.version ?? 0) + 1;
   const { data, error } = await db
     .from("artifacts")
-    .insert({ project_id: projectId, user_id: userId, kind, version, content, meta, status: "pending" })
+    .insert({ project_id: projectId, user_id: userId, kind, version, content, meta: meta as any, status: "pending" })
     .select("*")
     .single();
   if (error) throw new Error(error.message);
   return data;
+}
+
+export async function generateIdeaGraphForProjectImpl(db: DB, userId: string, projectId: string) {
+  const project = await loadProject(db, projectId);
+  const idea = await selectedIdea(db, projectId);
+  const { data: sources } = await db
+    .from("sources")
+    .select("title,abstract")
+    .eq("project_id", projectId)
+    .limit(6);
+
+  const graph = await generateIdeaGraphImpl(
+    project.prompt,
+    { title: String(idea.title), summary: idea.summary ?? "" },
+    (sources ?? []) as Array<{ title: string; abstract?: string | null }>,
+  );
+
+  const artifact = await saveArtifact(db, userId, projectId, "idea_graph", JSON.stringify(graph), {
+    nodes: graph.nodes.length,
+    edges: graph.edges.length,
+  });
+  await log(db, userId, projectId, STAGE.ideaGraph, `Idea DAG generated with ${graph.nodes.length} nodes`, {
+    actor: "synthesis-agent",
+  });
+  await setStage(db, projectId, STAGE.formulation);
+  return artifact;
 }
 
 export async function formulateImpl(db: DB, userId: string, projectId: string) {
@@ -409,7 +436,7 @@ export async function formulateImpl(db: DB, userId: string, projectId: string) {
     .limit(12);
 
   const corpus = (sources ?? [])
-    .map((s) => wrapUntrusted(`${s.title} (${s.year ?? "n.d."})`, (s.abstract ?? "").slice(0, 1200)))
+    .map((s: any) => wrapUntrusted(`${s.title} (${s.year ?? "n.d."})`, (s.abstract ?? "").slice(0, 1200)))
     .join("\n\n");
 
   const out = await askJson<{ draft: string; lineage: string[]; positioning: string }>(
@@ -738,15 +765,17 @@ if _kkey:
   const jsonMatches = stdout.match(/\{[^{}]*"(?:loss|accuracy|f1|precision|recall|score|psnr|ssim|mse|val_loss)"[^{}]*\}/gi);
   if (jsonMatches && jsonMatches.length > 0) {
     try {
-      realMetrics = JSON.parse(jsonMatches[jsonMatches.length - 1]);
+      const matchStr = jsonMatches[jsonMatches.length - 1];
+      if (matchStr) realMetrics = JSON.parse(matchStr);
     } catch {}
   }
   if (Object.keys(realMetrics).length === 0) {
     const lines = stdout.split("\n").map((l) => l.trim()).filter(Boolean);
     for (let i = lines.length - 1; i >= Math.max(0, lines.length - 10); i--) {
-      if (lines[i].startsWith("{") && lines[i].endsWith("}")) {
+      const line = lines[i];
+      if (line && line.startsWith("{") && line.endsWith("}")) {
         try {
-          const parsed = JSON.parse(lines[i]);
+          const parsed = JSON.parse(line);
           if (typeof parsed === "object" && parsed !== null) {
             realMetrics = parsed as Record<string, number>;
             break;
@@ -807,8 +836,8 @@ Do not fabricate fake numbers if stdout contains real ones.`,
       user_id: userId,
       version,
       label: opts.label,
-      config: opts.config,
-      metrics: pyResult.metrics ?? {},
+      config: opts.config as any,
+      metrics: (pyResult.metrics ?? {}) as any,
       score: Number(pyResult.score ?? 0),
       verdict: pyResult.verdict === "good" ? "good" : "bad",
       architecture_change: opts.architecture_change,
@@ -1196,7 +1225,7 @@ export async function theoryImpl(db: DB, userId: string, projectId: string) {
     .limit(10);
   if (!sources?.length) throw new Error("Run the research phase first.");
 
-  const corpus = sources.map((s) => wrapUntrusted(s.title, (s.abstract ?? "").slice(0, 1200))).join("\n\n");
+  const corpus = sources.map((s: any) => wrapUntrusted(s.title, (s.abstract ?? "").slice(0, 1200))).join("\n\n");
 
   const out = await askJson<{
     theorems: Array<{ statement: string; sketch: string; assumptions: string }>;
@@ -1251,7 +1280,7 @@ export async function handlePipelineAction(payload: any, req?: any) {
     case "select":
       return selectIdeaImpl(supabase, userId, data);
     case "ideaGraph":
-      return generateIdeaGraphImpl(supabase, userId, data.projectId);
+      return generateIdeaGraphForProjectImpl(supabase, userId, data.projectId);
     case "formulate":
       return formulateImpl(supabase, userId, data.projectId);
     case "pseudocode":
