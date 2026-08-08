@@ -53,9 +53,9 @@ export async function getAuthenticatedContextFromRequest(request: Request) {
   let userId = "00000000-0000-0000-0000-000000000000";
   if (token && token.split('.').length === 3) {
     try {
-      const { data } = await supabase.auth.getClaims(token);
-      if (data?.claims?.sub) {
-        userId = data.claims.sub;
+      const { data } = await supabase.auth.getUser(token);
+      if (data?.user?.id) {
+        userId = data.user.id;
       }
     } catch {
       // Use fallback default user ID
