@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useParams } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -142,24 +141,24 @@ function RunWorkspace() {
   };
 
   const call = {
-    research: useServerFn(runResearch),
-    ideas: useServerFn(surfaceIdeas),
-    select: useServerFn(selectIdea),
-    ideaGraph: useServerFn(generateIdeaGraph),
-    formulate: useServerFn(formulateIdea),
-    pseudocode: useServerFn(generatePseudocode),
-    code: useServerFn(generateCode),
-    review: useServerFn(reviewArtifact),
-    execute: useServerFn(executeRun),
-    rerun: useServerFn(rerunExperiment),
-    propose: useServerFn(proposeArchitectureChange),
-    decide: useServerFn(decideArchitectureChange),
-    paper: useServerFn(generatePaper),
-    plagiarism: useServerFn(runPlagiarismCheck),
-    memory: useServerFn(distillMemory),
-    theory: useServerFn(runTheoryBranch),
-    supervisorStatus: useServerFn(getSupervisorStatus),
-    supervisorAdvance: useServerFn(triggerSupervisorAdvance),
+    research: runResearch,
+    ideas: surfaceIdeas,
+    select: selectIdea,
+    ideaGraph: generateIdeaGraph,
+    formulate: formulateIdea,
+    pseudocode: generatePseudocode,
+    code: generateCode,
+    review: reviewArtifact,
+    execute: executeRun,
+    rerun: rerunExperiment,
+    propose: proposeArchitectureChange,
+    decide: decideArchitectureChange,
+    paper: generatePaper,
+    plagiarism: runPlagiarismCheck,
+    memory: distillMemory,
+    theory: runTheoryBranch,
+    supervisorStatus: getSupervisorStatus,
+    supervisorAdvance: triggerSupervisorAdvance,
   };
 
   const [pending, setPending] = useState<string | null>(null);

@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -38,7 +37,7 @@ export const Route = createFileRoute("/_authenticated/runs/")({
 function RunsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const start = useServerFn(createRun);
+  const start = createRun;
 
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"vague" | "detailed">("vague");
