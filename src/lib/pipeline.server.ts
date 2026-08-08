@@ -565,6 +565,11 @@ async function executeVersion(
 
       const autoInstallHeader = `import subprocess, sys, os
 
+try:
+    import torch
+except ImportError:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cpu"], check=False)
+
 _NEEDED_PACKAGES = {
     'kaggle': 'kaggle',
     'pandas': 'pandas',
@@ -573,7 +578,6 @@ _NEEDED_PACKAGES = {
     'scipy': 'scipy',
     'cv2': 'opencv-python',
     'tqdm': 'tqdm',
-    'torchvision': 'torchvision',
 }
 
 for _mod, _pip in _NEEDED_PACKAGES.items():
