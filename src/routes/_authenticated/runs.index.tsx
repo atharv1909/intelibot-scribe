@@ -78,12 +78,38 @@ function RunsPage() {
           newNames.push(file.name);
           toast.success(`Processed style reference from ${file.name}`);
         } else {
-          // Client-side text fallback for non-standard PDFs
+          // Client-side clean text extraction for PDFs
           const text = await file.text().catch(() => "");
-          const cleanText = text.replace(/[^\x20-\x7E\n]/g, " ").slice(0, 1500);
-          combinedStyle += (combinedStyle ? "\n\n" : "") + (cleanText || `Reference style from ${file.name}`);
+          const stringMatches = text.match(/\(([^()]{8,})\)/g);
+          let cleanLines: string[] = [];
+          if (stringMatches && stringMatches.length > 5) {
+            cleanLines = stringMatches
+              .map((s) => s.slice(1, -1).trim())
+              .filter(
+                (s) =>
+                  s.length > 10 &&
+                  !/^\/[A-Z]/i.test(s) &&
+                  !/^(FlateDecode|ObjStm|Type|Length|Filter|Font|Catalog)/i.test(s),
+              );
+          }
+          if (cleanLines.length < 5) {
+            cleanLines = text
+              .split(/\r?\n/)
+              .map((l) => l.replace(/[^\x20-\x7E]/g, " ").trim())
+              .filter(
+                (l) =>
+                  l.length > 15 &&
+                  !l.startsWith("/") &&
+                  !l.startsWith("<<") &&
+                  !l.startsWith(">>") &&
+                  !/ObjStm|FlateDecode|Catalog|Pages|Type|Filter|Length/i.test(l),
+              );
+          }
+          const extractedText =
+            cleanLines.slice(0, 40).join("\n") || `Writing style reference sample from ${file.name}`;
+          combinedStyle += (combinedStyle ? "\n\n" : "") + extractedText;
           newNames.push(file.name);
-          toast.success(`Loaded reference from ${file.name}`);
+          toast.success(`Processed style reference from ${file.name}`);
         }
       } catch {
         // Ultimate fallback: accept file name as style tag

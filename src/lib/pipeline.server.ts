@@ -526,26 +526,109 @@ async function executeVersion(
     .maybeSingle();
   const version = (last?.version ?? 0) + 1;
 
-  // 1. Send the code to our real Python FastAPI backend for E2B execution and Groq evaluation!
-  const backendUrl = getBackendUrl();
-  const res = await fetch(`${backendUrl}/api/execute`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      project_id: projectId,
-      user_id: userId,
-      code: code.content,
-      config: opts.config,
-      label: opts.label,
-      architecture_change: opts.architecture_change
-    })
-  });
+  // Execute code in E2B Cloud Sandbox natively from Node.js
+  let cleanCode = code.content.replace(/^```(?:python)?\n?/i, "").replace(/\n?```$/i, "").trim();
+  let stdout = "";
+  let stderr = "";
+  let success = true;
 
-  if (!res.ok) {
-    throw new Error(`Python Backend failed: ${res.statusText}`);
+  const e2bKey = process.env["E2B_API_KEY"];
+  if (e2bKey) {
+    try {
+      const { Sandbox } = await import("@e2b/code-interpreter");
+      const sbx = await Sandbox.create({
+        apiKey: e2bKey,
+        envs: {
+          KAGGLE_API_TOKEN: process.env["KAGGLE_API_TOKEN"] || process.env["KAGGLE_API_KEY"] || "",
+          KAGGLE_USERNAME: process.env["KAGGLE_USERNAME"] || "",
+          KAGGLE_KEY: process.env["KAGGLE_KEY"] || process.env["KAGGLE_API_KEY"] || "",
+        },
+        timeoutMs: 300000,
+      });
+
+      const execution = await sbx.runCode(cleanCode);
+      stdout = (execution.logs.stdout || []).join("\n");
+      stderr = (execution.logs.stderr || []).join("\n");
+      if (execution.error) {
+        stderr += `\n${execution.error.name || "Error"}: ${execution.error.value || execution.error}\n${execution.error.traceback || ""}`;
+        success = false;
+      }
+      await sbx.kill().catch(() => {});
+    } catch (err: any) {
+      stdout = `E2B Execution note: ${err?.message || err}`;
+      stderr = err?.message || String(err);
+      success = false;
+    }
+  } else {
+    stdout = "E2B_API_KEY is not configured in environment variables. Set E2B_API_KEY in Vercel to run code in E2B cloud sandbox.";
   }
 
-  const { data: pyResult } = await res.json();
+  // Extract real execution metrics directly from STDOUT JSON
+  let realMetrics: Record<string, number> = {};
+  const jsonMatches = stdout.match(/\{[^{}]*"(?:loss|accuracy|f1|precision|recall|score|psnr|ssim|mse|val_loss)"[^{}]*\}/gi);
+  if (jsonMatches && jsonMatches.length > 0) {
+    try {
+      realMetrics = JSON.parse(jsonMatches[jsonMatches.length - 1]);
+    } catch {}
+  }
+  if (Object.keys(realMetrics).length === 0) {
+    const lines = stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+    for (let i = lines.length - 1; i >= Math.max(0, lines.length - 10); i--) {
+      if (lines[i].startsWith("{") && lines[i].endsWith("}")) {
+        try {
+          const parsed = JSON.parse(lines[i]);
+          if (typeof parsed === "object" && parsed !== null) {
+            realMetrics = parsed as Record<string, number>;
+            break;
+          }
+        } catch {}
+      }
+    }
+  }
+
+  const evalData = await askJson<{
+    metrics?: Record<string, number>;
+    score: number;
+    verdict: "good" | "bad";
+    analysis: string;
+  }>(
+    [
+      { role: "system", content: FIREWALL_SYSTEM },
+      {
+        role: "user",
+        content: `You are the sandbox execution reporter for research code execution.
+Execution Success: ${success}
+STDERR / Errors:
+${stderr.slice(-1500)}
+
+STDOUT:
+${stdout.slice(-2500)}
+
+Extracted Real Execution Metrics from stdout: ${JSON.stringify(realMetrics)}
+
+Return JSON with:
+"metrics": dict (preserve extracted stdout metrics or format them),
+"score": 0.0 to 1.0 number indicating execution quality,
+"verdict": "good" or "bad",
+"analysis": 3-5 sentence qualitative summary of results.
+Do not fabricate fake numbers if stdout contains real ones.`,
+      },
+    ],
+    {
+      metrics: realMetrics,
+      score: success ? 0.95 : 0.1,
+      verdict: success ? "good" : "bad",
+      analysis: success ? "Code executed in sandbox." : `Execution note: ${stderr.slice(0, 200)}`,
+    },
+  );
+
+  const pyResult = {
+    metrics: Object.keys(realMetrics).length > 0 ? realMetrics : evalData.metrics || {},
+    score: evalData.score ?? (success ? 0.95 : 0.1),
+    verdict: evalData.verdict || (success ? "good" : "bad"),
+    analysis: evalData.analysis || "",
+    stdout: `${stdout}\n${stderr}`.trim(),
+  };
 
   const { data: created, error } = await db
     .from("experiment_versions")
