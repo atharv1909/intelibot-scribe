@@ -1,123 +1,471 @@
-/* ------------------------------------------------------------------ */
-/*  NON-BLOCKING SANDBOX EXECUTION                                     */
-/*  Replaces the old blocking `executeVersion` in pipeline.server.ts   */
-/*                                                                      */
-/*  Why: `await sbx.runCode(...)` inside a single POST /api/pipeline   */
-/*  request is bound by Vercel's per-request timeout (60s on Hobby,    */
-/*  even 300s on Fluid Compute is not enough for real PyTorch          */
-/*  training). E2B sandboxes persist independently of any one HTTP     */
-/*  request, so we start the run in the BACKGROUND inside the sandbox, */
-/*  return immediately, and let subsequent short polls (each well      */
-/*  under the timeout) check on it and reconnect via Sandbox.connect() */
-/*  instead of Sandbox.create() — so we never re-run or lose the job.  */
-/* ------------------------------------------------------------------ */
-
 import { Sandbox } from "@e2b/code-interpreter";
 
-// ---- shared helpers -------------------------------------------------
+/**
+ * Long-running experiment execution for Intelibot Scribe.
+ *
+ * Important design:
+ *
+ * - Vercel request starts the sandbox and returns immediately.
+ * - The actual experiment runs as a detached process INSIDE E2B.
+ * - Subsequent requests poll the sandbox.
+ * - Dependencies are installed ONLY when the generated code actually imports them.
+ * - PyTorch is NOT installed unless torch/torchvision/torchaudio is imported.
+ * - Kaggle credentials come only from environment variables.
+ * - No fake metrics are generated here.
+ */
 
-function buildAutoInstallHeader(): string {
-  return `import subprocess, sys, os
+const DEFAULT_SANDBOX_TIMEOUT_MS = 3_500_000;
+const DEFAULT_DEPENDENCY_INSTALL_TIMEOUT_SECONDS = 300;
 
-try:
-    import torch
-except ImportError:
-    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cpu"], check=False)
+const SANDBOX_TIMEOUT_MS = readPositiveIntEnv(
+  "E2B_SANDBOX_TIMEOUT_MS",
+  DEFAULT_SANDBOX_TIMEOUT_MS,
+);
 
-_NEEDED_PACKAGES = {
-    'kaggle': 'kaggle',
-    'pandas': 'pandas',
-    'sklearn': 'scikit-learn',
-    'PIL': 'pillow',
-    'scipy': 'scipy',
-    'cv2': 'opencv-python',
-    'tqdm': 'tqdm',
+const DEPENDENCY_INSTALL_TIMEOUT_SECONDS = readPositiveIntEnv(
+  "E2B_DEPENDENCY_INSTALL_TIMEOUT_SECONDS",
+  DEFAULT_DEPENDENCY_INSTALL_TIMEOUT_SECONDS,
+);
+
+const RUN_SCRIPT_PATH = "/tmp/intelibot_experiment.py";
+const STDOUT_LOG_PATH = "/tmp/intelibot_experiment.stdout.log";
+const STDERR_LOG_PATH = "/tmp/intelibot_experiment.stderr.log";
+const DONE_MARKER_PATH = "/tmp/intelibot_experiment.done";
+const START_MARKER_PATH = "/tmp/intelibot_experiment.started";
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+
+  return Math.floor(value);
 }
 
-for _mod, _pip in _NEEDED_PACKAGES.items():
-    try:
-        __import__(_mod)
-    except ImportError:
-        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", _pip], check=False)
+/**
+ * Encode arbitrary generated Python safely.
+ *
+ * We deliberately do not inject the generated source into a Python triple
+ * quoted string because generated code may itself contain triple quotes.
+ */
+function encodePython(code: string): string {
+  return Buffer.from(code, "utf8").toString("base64");
+}
 
-_kkey = os.environ.get("KAGGLE_KEY") or os.environ.get("KAGGLE_API_TOKEN") or os.environ.get("KAGGLE_API_KEY")
-_kuser = os.environ.get("KAGGLE_USERNAME") or "atharv0919"
-if _kkey:
-    os.environ["KAGGLE_KEY"] = _kkey
-    os.environ["KAGGLE_API_TOKEN"] = _kkey
-    os.environ["KAGGLE_USERNAME"] = _kuser
+/**
+ * The Python bootstrap:
+ *
+ * 1. Decodes the generated source.
+ * 2. Parses imports using AST.
+ * 3. Checks whether modules are already installed.
+ * 4. Installs only missing packages.
+ * 5. Executes the original generated code.
+ *
+ * This avoids the previous behaviour where every experiment could trigger
+ * a PyTorch installation.
+ */
+function buildExecutionScript(cleanCode: string): string {
+  const encoded = encodePython(cleanCode);
+
+  return `import ast
+import base64
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+import time
+import traceback
+
+USER_CODE = base64.b64decode(${JSON.stringify(encoded)}).decode("utf-8")
+
+PACKAGE_MAP = {
+    "sklearn": "scikit-learn",
+    "PIL": "Pillow",
+    "cv2": "opencv-python",
+    "yaml": "PyYAML",
+    "bs4": "beautifulsoup4",
+    "dateutil": "python-dateutil",
+    "skimage": "scikit-image",
+    "xgboost": "xgboost",
+    "lightgbm": "lightgbm",
+    "catboost": "catboost",
+    "openpyxl": "openpyxl",
+    "xlrd": "xlrd",
+    "seaborn": "seaborn",
+    "matplotlib": "matplotlib",
+    "scipy": "scipy",
+    "pandas": "pandas",
+    "numpy": "numpy",
+    "joblib": "joblib",
+    "tqdm": "tqdm",
+    "requests": "requests",
+    "httpx": "httpx",
+    "kaggle": "kaggle",
+    "kagglehub": "kagglehub",
+    "torch": "torch",
+    "torchvision": "torchvision",
+    "torchaudio": "torchaudio",
+}
+
+TORCH_MODULES = {
+    "torch",
+    "torchvision",
+    "torchaudio",
+}
+
+BLOCKED_MODULES = {
+    "tensorflow",
+    "keras",
+    "jax",
+    "jaxlib",
+}
+
+def get_imported_modules(source):
+    tree = ast.parse(source)
+    modules = set()
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".")[0].strip()
+                if root:
+                    modules.add(root)
+
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                root = node.module.split(".")[0].strip()
+                if root:
+                    modules.add(root)
+
+    return modules
+
+def is_installed(module_name):
     try:
-        import json, pathlib
-        kdir = pathlib.Path.home() / ".kaggle"
-        kdir.mkdir(parents=True, exist_ok=True)
-        kfile = kdir / "kaggle.json"
-        kfile.write_text(json.dumps({"username": _kuser, "key": _kkey, "token": _kkey}))
-        os.chmod(kfile, 0o600)
+        return importlib.util.find_spec(module_name) is not None
     except Exception:
-        pass
+        return False
 
+def pip_install(packages, torch_packages):
+    if not packages and not torch_packages:
+        return
+
+    env = os.environ.copy()
+    env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+    env["PIP_NO_INPUT"] = "1"
+
+    common = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--no-input",
+        "--no-cache-dir",
+        "-q",
+    ]
+
+    if torch_packages:
+        torch_command = common + [
+            *torch_packages,
+            "--index-url",
+            "https://download.pytorch.org/whl/cpu",
+        ]
+
+        subprocess.run(
+            torch_command,
+            check=True,
+            timeout=${DEPENDENCY_INSTALL_TIMEOUT_SECONDS},
+            env=env,
+        )
+
+    if packages:
+        subprocess.run(
+            common + packages,
+            check=True,
+            timeout=${DEPENDENCY_INSTALL_TIMEOUT_SECONDS},
+            env=env,
+        )
+
+def configure_kaggle():
+    key = (
+        os.environ.get("KAGGLE_KEY")
+        or os.environ.get("KAGGLE_API_TOKEN")
+        or os.environ.get("KAGGLE_API_KEY")
+    )
+
+    username = os.environ.get("KAGGLE_USERNAME")
+
+    if not key:
+        return
+
+    os.environ["KAGGLE_KEY"] = key
+    os.environ["KAGGLE_API_TOKEN"] = key
+
+    if username:
+        os.environ["KAGGLE_USERNAME"] = username
+
+        try:
+            from pathlib import Path
+
+            kaggle_dir = Path.home() / ".kaggle"
+            kaggle_dir.mkdir(parents=True, exist_ok=True)
+
+            kaggle_file = kaggle_dir / "kaggle.json"
+
+            kaggle_file.write_text(
+                json.dumps(
+                    {
+                        "username": username,
+                        "key": key,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            os.chmod(kaggle_file, 0o600)
+        except Exception:
+            pass
+
+def install_missing_dependencies():
+    modules = get_imported_modules(USER_CODE)
+
+    stdlib = getattr(sys, "stdlib_module_names", set())
+
+    regular_packages = []
+    torch_packages = []
+
+    for module in sorted(modules):
+        if not module:
+            continue
+
+        if module in stdlib:
+            continue
+
+        if module in BLOCKED_MODULES:
+            raise RuntimeError(
+                "Unsupported dependency requested by generated code: "
+                + module
+                + ". Please generate a CPU-compatible implementation."
+            )
+
+        if is_installed(module):
+            continue
+
+        package = PACKAGE_MAP.get(module, module)
+
+        if module in TORCH_MODULES:
+            torch_packages.append(package)
+        else:
+            regular_packages.append(package)
+
+    if torch_packages or regular_packages:
+        print(
+            json.dumps(
+                {
+                    "event": "dependency_installation",
+                    "packages": regular_packages,
+                    "torch_packages": torch_packages,
+                }
+            ),
+            flush=True,
+        )
+
+        pip_install(
+            sorted(set(regular_packages)),
+            sorted(set(torch_packages)),
+        )
+
+def main():
+    started_at = time.time()
+
+    try:
+        with open(${JSON.stringify(START_MARKER_PATH)}, "w", encoding="utf-8") as f:
+            f.write(str(time.time()))
+
+        configure_kaggle()
+
+        print(
+            json.dumps(
+                {
+                    "event": "execution_started",
+                    "python": sys.version.split()[0],
+                }
+            ),
+            flush=True,
+        )
+
+        install_missing_dependencies()
+
+        compiled = compile(
+            USER_CODE,
+            "<generated-research-code>",
+            "exec",
+        )
+
+        exec(compiled, {"__name__": "__main__"})
+
+        print(
+            json.dumps(
+                {
+                    "event": "execution_finished",
+                    "success": True,
+                    "duration_seconds": round(time.time() - started_at, 3),
+                }
+            ),
+            flush=True,
+        )
+
+        return 0
+
+    except subprocess.TimeoutExpired as exc:
+        print(
+            json.dumps(
+                {
+                    "event": "dependency_installation_timeout",
+                    "error": str(exc),
+                }
+            ),
+            file=sys.stderr,
+            flush=True,
+        )
+
+        traceback.print_exc()
+
+        return 124
+
+    except Exception as exc:
+        print(
+            json.dumps(
+                {
+                    "event": "execution_failed",
+                    "error": str(exc),
+                }
+            ),
+            file=sys.stderr,
+            flush=True,
+        )
+
+        traceback.print_exc()
+
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main())
 `;
 }
 
-const SANDBOX_TIMEOUT_MS = 3_500_000; // ~58 min; stays under E2B's 1hr Hobby sandbox cap
-const RUN_SCRIPT_PATH = "/tmp/run_experiment.py";
-const STDOUT_LOG_PATH = "/tmp/experiment_stdout.log";
-const STDERR_LOG_PATH = "/tmp/experiment_stderr.log";
-const DONE_MARKER_PATH = "/tmp/experiment_done.marker"; // written last, contains exit code
-
-/**
- * Starts the code executing in the BACKGROUND inside a fresh sandbox and
- * returns immediately with the sandbox id. Does NOT wait for completion.
- */
-export async function startSandboxExecution(cleanCode: string): Promise<{
+export async function startSandboxExecution(
+  cleanCode: string,
+): Promise<{
   sandboxId: string | null;
   startedOk: boolean;
   immediateNote?: string;
 }> {
   const e2bKey = process.env["E2B_API_KEY"];
+
   if (!e2bKey) {
-    return { sandboxId: null, startedOk: false, immediateNote: "E2B_API_KEY is not configured." };
+    return {
+      sandboxId: null,
+      startedOk: false,
+      immediateNote: "E2B_API_KEY is not configured.",
+    };
+  }
+
+  if (!cleanCode.trim()) {
+    return {
+      sandboxId: null,
+      startedOk: false,
+      immediateNote: "No executable Python code was provided.",
+    };
   }
 
   try {
-    const sbx = await Sandbox.create({
+    const sandbox = await Sandbox.create({
       apiKey: e2bKey,
+
       envs: {
-        KAGGLE_API_TOKEN: process.env["KAGGLE_API_TOKEN"] || process.env["KAGGLE_API_KEY"] || "",
-        KAGGLE_USERNAME: process.env["KAGGLE_USERNAME"] || "",
-        KAGGLE_KEY: process.env["KAGGLE_KEY"] || process.env["KAGGLE_API_KEY"] || "",
+        KAGGLE_API_TOKEN:
+          process.env["KAGGLE_API_TOKEN"] ||
+          process.env["KAGGLE_API_KEY"] ||
+          "",
+
+        KAGGLE_USERNAME:
+          process.env["KAGGLE_USERNAME"] ||
+          "",
+
+        KAGGLE_KEY:
+          process.env["KAGGLE_KEY"] ||
+          process.env["KAGGLE_API_KEY"] ||
+          "",
       },
+
       timeoutMs: SANDBOX_TIMEOUT_MS,
     });
 
-    const codeToRun = `${buildAutoInstallHeader()}\n\n${cleanCode}`;
-    await sbx.files.write(RUN_SCRIPT_PATH, codeToRun);
+    const script = buildExecutionScript(cleanCode);
 
-    // Run in the background: redirect stdout/stderr to files, then write
-    // a marker file with the exit code once the process actually finishes.
-    // This lets a later, separate request poll for completion cheaply
-    // (just checking whether the marker file exists) instead of blocking.
-    const bgCommand =
+    await sandbox.files.write(
+      RUN_SCRIPT_PATH,
+      script,
+    );
+
+    /*
+     * Remove stale marker files explicitly.
+     *
+     * This matters when the same sandbox/template behaviour is reused and
+     * prevents a poller from accidentally treating an old marker as a
+     * completed execution.
+     */
+    await sandbox.commands.run(
+      [
+        `rm -f ${START_MARKER_PATH}`,
+        `rm -f ${DONE_MARKER_PATH}`,
+        `rm -f ${STDOUT_LOG_PATH}`,
+        `rm -f ${STDERR_LOG_PATH}`,
+      ].join(" && "),
+    );
+
+    /*
+     * The important part:
+     *
+     * The HTTP request never waits for Python execution.
+     * E2B owns the long-running process.
+     */
+    const backgroundCommand =
       `python3 ${RUN_SCRIPT_PATH} > ${STDOUT_LOG_PATH} 2> ${STDERR_LOG_PATH}; ` +
-      `echo $? > ${DONE_MARKER_PATH}`;
+      `exit_code=$?; ` +
+      `printf '%s' "$exit_code" > ${DONE_MARKER_PATH}`;
 
-    await sbx.commands.run(bgCommand, { background: true });
+    await sandbox.commands.run(
+      backgroundCommand,
+      {
+        background: true,
+      },
+    );
 
-    // Deliberately do NOT kill the sandbox here — it must stay alive so a
-    // later poll can reconnect to it while the background job keeps running.
-    return { sandboxId: sbx.sandboxId, startedOk: true };
-  } catch (err: any) {
-    return { sandboxId: null, startedOk: false, immediateNote: err?.message || String(err) };
+    return {
+      sandboxId: sandbox.sandboxId,
+      startedOk: true,
+    };
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    return {
+      sandboxId: null,
+      startedOk: false,
+      immediateNote: message,
+    };
   }
 }
 
-/**
- * Reconnects to an already-running sandbox and does a CHEAP, non-blocking
- * check: has the background job finished yet? This call itself completes
- * in a couple seconds regardless of how long the underlying training run
- * takes, so it's safe to call from a request bound by a short timeout.
- */
-export async function pollSandboxExecution(sandboxId: string): Promise<{
+export async function pollSandboxExecution(
+  sandboxId: string,
+): Promise<{
   finished: boolean;
   success: boolean;
   stdout: string;
@@ -125,44 +473,92 @@ export async function pollSandboxExecution(sandboxId: string): Promise<{
   error?: string;
 }> {
   const e2bKey = process.env["E2B_API_KEY"];
+
   if (!e2bKey) {
-    return { finished: true, success: false, stdout: "", stderr: "", error: "E2B_API_KEY is not configured." };
-  }
-
-  try {
-    const sbx = await Sandbox.connect(sandboxId, { apiKey: e2bKey });
-
-    // Cheap existence check for the marker file written after the process exits.
-    const markerCheck = await sbx.commands.run(
-      `test -f ${DONE_MARKER_PATH} && echo EXISTS || echo MISSING`,
-    );
-    const finished = markerCheck.stdout.includes("EXISTS");
-
-    if (!finished) {
-      return { finished: false, success: false, stdout: "", stderr: "" };
-    }
-
-    const [exitCodeStr, stdout, stderr] = await Promise.all([
-      sbx.files.read(DONE_MARKER_PATH).catch(() => "1"),
-      sbx.files.read(STDOUT_LOG_PATH).catch(() => ""),
-      sbx.files.read(STDERR_LOG_PATH).catch(() => ""),
-    ]);
-
-    const exitCode = parseInt(String(exitCodeStr).trim(), 10);
-    const success = exitCode === 0;
-
-    // Now that we've collected the results, the sandbox is no longer needed.
-    await sbx.kill().catch(() => {});
-
-    return { finished: true, success, stdout: String(stdout), stderr: String(stderr) };
-  } catch (err: any) {
-    // Sandbox may have expired (hit SANDBOX_TIMEOUT_MS) or been killed already.
     return {
       finished: true,
       success: false,
       stdout: "",
       stderr: "",
-      error: err?.message || String(err),
+      error: "E2B_API_KEY is not configured.",
+    };
+  }
+
+  try {
+    const sandbox = await Sandbox.connect(
+      sandboxId,
+      {
+        apiKey: e2bKey,
+      },
+    );
+
+    const markerCheck = await sandbox.commands.run(
+      `test -f ${DONE_MARKER_PATH} && echo EXISTS || echo RUNNING`,
+    );
+
+    const finished =
+      markerCheck.stdout.includes("EXISTS");
+
+    if (!finished) {
+      return {
+        finished: false,
+        success: false,
+        stdout: "",
+        stderr: "",
+      };
+    }
+
+    const [
+      exitCodeRaw,
+      stdout,
+      stderr,
+    ] = await Promise.all([
+      sandbox.files
+        .read(DONE_MARKER_PATH)
+        .catch(() => "1"),
+
+      sandbox.files
+        .read(STDOUT_LOG_PATH)
+        .catch(() => ""),
+
+      sandbox.files
+        .read(STDERR_LOG_PATH)
+        .catch(() => ""),
+    ]);
+
+    const exitCode = Number(
+      String(exitCodeRaw).trim(),
+    );
+
+    const success = exitCode === 0;
+
+    await sandbox.kill().catch(() => undefined);
+
+    return {
+      finished: true,
+      success,
+      stdout: String(stdout),
+      stderr: String(stderr),
+      ...(success
+        ? {}
+        : {
+            error:
+              String(stderr).trim() ||
+              `Sandbox process exited with code ${exitCode}.`,
+          }),
+    };
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    return {
+      finished: true,
+      success: false,
+      stdout: "",
+      stderr: "",
+      error: message,
     };
   }
 }
