@@ -455,16 +455,27 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `1. OUTPUT FORMAT (ABSOLUTELY MANDATORY):\n` +
         `   - Return ONLY a single markdown \`\`\`python code block containing 100% executable Python.\n` +
         `   - DO NOT write any introductory or concluding conversational text, notes, or explanations outside the code block.\n\n` +
-        `2. DATASET ACQUISITION WITH SYNTHETIC FALLBACK (MANDATORY):\n` +
-        `   - Attempt Kaggle dataset download using positional argument syntax: \`kaggle.api.dataset_download_files("owner/dataset-slug", path="./data", unzip=True)\`.\n` +
-        `   - CRITICAL PROHIBITION: NEVER pass \`dataset_name=...\` as a keyword argument (it causes TypeError in Kaggle API).\n` +
-        `   - Always wrap Kaggle acquisition in a \`try ... except Exception:\` block. If Kaggle download fails, load synthetic domain-matched PyTorch tensors (e.g. \`X = torch.randn(200, 10)\`, \`y = torch.randint(0, 2, (200, 1))\`) so the script NEVER crashes.\n\n` +
-        `3. BUG-FREE MODEL & REAL METRICS COMPUTATION (MANDATORY):\n` +
-        `   - Match the research prompt ("${project.prompt.slice(0, 150)}"). Implement PyTorch model (\`nn.Module\`), training loop, and evaluation for THAT domain.\n` +
-        `   - Ensure all variables are explicitly defined. Convert DataFrames cleanly: \`X = df.select_dtypes(include=[np.number]).fillna(0).values.astype(np.float32)\`.\n` +
-        `   - Run model evaluation forward pass on test split and print real computed metrics directly to STDOUT as JSON at the very end of script:\n` +
-        `     \`print(json.dumps({"loss": float(loss), "accuracy": float(acc)}))\`\n` +
-        `   - YOU ARE STRICTLY FORBIDDEN from hardcoding static numbers (\`accuracy = 0.9\`) or writing stub functions.\n\n` +
+        `2. REAL KAGGLE DATASET DOWNLOAD (ABSOLUTELY MANDATORY):\n` +
+        `   - You MUST specify a REAL, PUBLIC, POPULAR Kaggle dataset slug matched to "${project.prompt.slice(0, 100)}".\n` +
+        `     Examples of valid real Kaggle slugs:\n` +
+        `     * Cardiovascular / Heart Disease: "ronitf/heart-disease-uci" or "rashikrahmanpritom/heart-attack-analysis-prediction-dataset"\n` +
+        `     * Vision / Diffusion / Images: "zalando-research/fashion-mnist" or "paultimothymooney/chest-xray-pneumonia"\n` +
+        `     * NLP / Text: "lakshmi25npathi/imdb-dataset-of-50k-movie-reviews"\n` +
+        `     * Tabular ML: "uciml/pima-indians-diabetes-database"\n` +
+        `   - DO NOT write literal placeholder strings like "owner/dataset-slug". You MUST use an actual real Kaggle slug string!\n` +
+        `   - Download using: \`kaggle.api.dataset_download_files("real_owner/real_slug", path="./data", unzip=True)\`.\n` +
+        `   - CRITICAL: NEVER pass \`dataset_name=...\` as a keyword argument.\n` +
+        `   - YOU ARE STRICTLY FORBIDDEN FROM GENERATING SYNTHETIC / DUMMY RANDOM DATAFRAMES OR FAKE DATA ARRAYS. Use real downloaded data!\n\n` +
+        `3. BULLETPROOF DATA LOADING & PREPROCESSING:\n` +
+        `   - Import \`glob\` and dynamically find unzipped CSV files: \`csv_files = glob.glob("./data/**/*.csv", recursive=True)\` and load \`df = pd.read_csv(csv_files[0])\`.\n` +
+        `   - Dynamically identify numeric feature columns and target label column without hardcoding column names that might differ across datasets:\n` +
+        `     \`num_cols = df.select_dtypes(include=[np.number]).columns.tolist()\`; \`target_col = 'target' if 'target' in num_cols else ('output' if 'output' in num_cols else num_cols[-1])\`.\n` +
+        `   - Convert features & labels cleanly into float32 PyTorch tensors: \`X = df[[c for c in num_cols if c != target_col]].fillna(0).values.astype(np.float32)\`.\n\n` +
+        `4. REAL MODEL TRAINING & REAL COMPUTED METRICS:\n` +
+        `   - Implement a complete PyTorch model (\`nn.Module\`), training loop (e.g. 5 epochs), and test evaluation pass.\n` +
+        `   - At the very end of execution, compute actual test loss and test accuracy from the model evaluation pass and print directly to STDOUT as JSON:\n` +
+        `     \`print(json.dumps({"loss": float(test_loss), "accuracy": float(test_acc)}))\`\n` +
+        `   - YOU ARE STRICTLY FORBIDDEN from hardcoding static numbers (\`accuracy = 0.9\`) or writing fake stub functions.\n\n` +
         `Return PURE RUNNABLE PYTHON CODE ONLY inside a markdown python block.`,
     },
   ]);
