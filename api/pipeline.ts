@@ -20,10 +20,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    const result = await handlePipelineAction(body);
+    const result = await handlePipelineAction(body, req);
     return res.status(200).json({ ok: true, result });
   } catch (err: any) {
     console.error("Vercel pipeline API error:", err);
-    return res.status(500).json({ error: err?.message || "Internal pipeline error" });
+    return res.status(500).json({ error: err?.message || String(err), detail: String(err) });
   }
 }

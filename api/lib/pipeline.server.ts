@@ -1159,8 +1159,8 @@ export async function theoryImpl(db: DB, userId: string, projectId: string) {
   return artifact;
 }
 
-export async function handlePipelineAction(payload: any) {
-  const { supabase, userId } = await getAuthenticatedContext();
+export async function handlePipelineAction(payload: any, req?: any) {
+  const { supabase, userId } = await getAuthenticatedContext(req);
 
   const action = payload?.action;
   const data = payload?.data as any;

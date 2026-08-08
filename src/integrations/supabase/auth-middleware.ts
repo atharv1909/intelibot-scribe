@@ -65,7 +65,7 @@ export async function getAuthenticatedContextFromRequest(request: Request) {
   return { supabase, userId };
 }
 
-export async function getAuthenticatedContext() {
+export async function getAuthenticatedContext(req?: any) {
   const SUPABASE_URL =
     process.env['SUPABASE_URL'] ||
     process.env['VITE_SUPABASE_URL'] ||
@@ -76,14 +76,36 @@ export async function getAuthenticatedContext() {
     process.env['VITE_SUPABASE_PUBLISHABLE_KEY'] ||
     'sb_publishable_k_QCC0Af8s1-J6JnaJA9rQ_sNJ0HPIK';
 
-  try {
-    const { getRequest } = await import('@tanstack/react-start/server');
-    const req = getRequest();
-    if (req?.headers) {
-      return getAuthenticatedContextFromRequest(req);
+  if (req?.headers) {
+    const authHeader = typeof req.headers.get === 'function'
+      ? req.headers.get('authorization')
+      : (req.headers.authorization || req.headers['authorization']);
+    let token = typeof authHeader === 'string' ? authHeader.replace('Bearer ', '').trim() : '';
+
+    const supabase = createClient<Database>(
+      SUPABASE_URL,
+      SUPABASE_PUBLISHABLE_KEY,
+      {
+        global: {
+          fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
+          headers: token && token.split('.').length === 3 ? { Authorization: `Bearer ${token}` } : {},
+        },
+        auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+      }
+    );
+
+    let userId = "00000000-0000-0000-0000-000000000000";
+    if (token && token.split('.').length === 3) {
+      try {
+        const { data } = await supabase.auth.getUser(token);
+        if (data?.user?.id) {
+          userId = data.user.id;
+        }
+      } catch {
+        // Fallback default user ID
+      }
     }
-  } catch {
-    // Outside TanStack Start context (Vercel Serverless Function / Nitro API)
+    return { supabase, userId };
   }
 
   const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
