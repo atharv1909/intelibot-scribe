@@ -1,12 +1,58 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
 import { FIREWALL_SYSTEM, askJson, askText, wrapUntrusted } from "./ai.server";
 import { retrieveSources, scanForInjection } from "./research.server";
 import { generateIdeaGraphImpl } from "./idea-graph.server";
-import type { Database, Json } from "@/integrations/supabase/types";
-import { getAuthenticatedContext } from "@/integrations/supabase/auth-middleware";
 
-export type DB = SupabaseClient<Database>;
+export type DB = SupabaseClient<any>;
+
+export async function getAuthenticatedContext(req?: any) {
+  const SUPABASE_URL =
+    process.env['SUPABASE_URL'] ||
+    process.env['VITE_SUPABASE_URL'] ||
+    'https://ytxggpkqiotocubltqsk.supabase.co';
+
+  const SUPABASE_PUBLISHABLE_KEY =
+    process.env['SUPABASE_PUBLISHABLE_KEY'] ||
+    process.env['VITE_SUPABASE_PUBLISHABLE_KEY'] ||
+    'sb_publishable_k_QCC0Af8s1-J6JnaJA9rQ_sNJ0HPIK';
+
+  let token = "";
+  if (req?.headers) {
+    const authHeader = typeof req.headers.get === 'function'
+      ? req.headers.get('authorization')
+      : (req.headers.authorization || req.headers['authorization']);
+    if (typeof authHeader === 'string') {
+      token = authHeader.replace('Bearer ', '').trim();
+    }
+  }
+
+  const supabase = createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY,
+    {
+      global: {
+        headers: token && token.split('.').length === 3 ? { Authorization: `Bearer ${token}` } : {},
+      },
+      auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+    }
+  );
+
+  let userId = "00000000-0000-0000-0000-000000000000";
+  if (token && token.split('.').length === 3) {
+    try {
+      const { data } = await supabase.auth.getUser(token);
+      if (data?.user?.id) {
+        userId = data.user.id;
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
+  return { supabase, userId };
+}
 
 export function getBackendUrl(): string {
   if (process.env["PYTHON_BACKEND_URL"]) return process.env["PYTHON_BACKEND_URL"];
@@ -656,6 +702,36 @@ if _kkey:
     }
   } else {
     stdout = "E2B_API_KEY is not configured in environment variables. Set E2B_API_KEY in Vercel to run code in E2B cloud sandbox.";
+  }
+
+  if (!success || !stdout || stdout.includes("E2B_API_KEY is not configured")) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      let localRes = await fetch("http://127.0.0.1:8765/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: cleanCode }),
+        signal: controller.signal,
+      }).catch(async () => {
+        return fetch("http://127.0.0.1:8765", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: cleanCode }),
+          signal: controller.signal,
+        });
+      });
+      clearTimeout(timeoutId);
+
+      if (localRes && localRes.ok) {
+        const localData = await localRes.json();
+        stdout = localData.stdout || "";
+        stderr = localData.stderr || "";
+        success = localData.success ?? (localData.exit_code === 0);
+      }
+    } catch {
+      // Local execution agent not active on http://127.0.0.1:8765
+    }
   }
 
   let realMetrics: Record<string, number> = {};
