@@ -455,15 +455,21 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `1. OUTPUT FORMAT (ABSOLUTELY MANDATORY):\n` +
         `   - Return ONLY a single markdown \`\`\`python code block containing 100% executable Python.\n` +
         `   - DO NOT write any introductory or concluding conversational text, notes, or explanations outside the code block.\n\n` +
-        `2. DOMAIN-INTELLIGENT DATASET ACQUISITION (ABSOLUTELY MANDATORY):\n` +
-        `   - CATEGORY A: MedTech, Clinical, Tabular, Vision, NLP, or Empirical Benchmark Domains (Where Data Exists):\n` +
-        `     * You MUST use REAL published datasets. Synthetic/dummy data is STRICTLY BANNED for these domains.\n` +
-        `     * First attempt downloading a active, popular Kaggle dataset: \`kaggle.api.dataset_download_files("rashikrahmanpritom/heart-attack-analysis-prediction-dataset", path="./data", unzip=True)\` (positional args only, NEVER pass \`dataset_name=...\`).\n` +
-        `     * Wrap Kaggle in \`try ... except Exception:\`. If Kaggle returns 403/404, fall back to trying a list of active public raw dataset URLs:\n` +
-        `       \`urls = ["https://raw.githubusercontent.com/datasets/heart-disease/main/data/heart-disease.csv", "https://raw.githubusercontent.com/selva86/datasets/master/HeartDisease.csv"]\`\n` +
+        `2. DOMAIN-MATCHED DATASET ACQUISITION FOR "${project.prompt.slice(0, 150)}" (ABSOLUTELY MANDATORY):\n` +
+        `   - CATEGORY A: Empirical / Clinical / Tabular / Vision / NLP Benchmark Domains (Where Data Exists):\n` +
+        `     * You MUST select a REAL published dataset matched strictly to the user's research domain ("${project.prompt.slice(0, 80)}"). Synthetic data is STRICTLY BANNED.\n` +
+        `     * First attempt downloading an active, popular Kaggle dataset slug specifically matched to "${project.prompt.slice(0, 80)}":\n` +
+        `       - Heart / Cardio: "rashikrahmanpritom/heart-attack-analysis-prediction-dataset"\n` +
+        `       - Diabetes / Endocrine: "uciml/pima-indians-diabetes-database"\n` +
+        `       - Vision / Medical Imaging: "paultimothymooney/chest-xray-pneumonia" or "zalando-research/fashion-mnist"\n` +
+        `       - NLP / Text / Sentiment: "lakshmi25npathi/imdb-dataset-of-50k-movie-reviews"\n` +
+        `       - Credit / Financial / Tabular: "mlg-ulb/creditcardfraud"\n` +
+        `       Call using positional syntax: \`kaggle.api.dataset_download_files("domain_owner/domain_slug", path="./data", unzip=True)\` (NEVER pass \`dataset_name=...\`).\n` +
+        `     * Wrap Kaggle in \`try ... except Exception:\`. If Kaggle returns 403/404, fall back to trying a list of active public raw CSV URLs matching "${project.prompt.slice(0, 60)}":\n` +
+        `       \`urls = ["https://raw.githubusercontent.com/...", "https://raw.githubusercontent.com/..."]\`\n` +
         `       \`for u in urls:\` \`try: df = pd.read_csv(u); break\` \`except Exception: pass\`\n` +
         `   - CATEGORY B: Theoretical AI, Custom Latent Embeddings, Novel Math Operators, or Synthetic Latent Spaces (Where No Kaggle Dataset Exists):\n` +
-        `     * Synthesize clean, structured PyTorch tensors (e.g., \`embeddings = torch.randn(250, 512)\`) that directly represent the theoretical embedding/latent space.\n\n` +
+        `     * Synthesize clean, structured PyTorch tensors (e.g. \`embeddings = torch.randn(250, 512)\`) that directly represent the theoretical embedding/latent space.\n\n` +
         `3. BULLETPROOF DATA LOADING & PREPROCESSING:\n` +
         `   - Import \`glob\` and dynamically discover downloaded CSV files if available: \`csv_files = glob.glob("./data/**/*.csv", recursive=True)\`; if \`csv_files\`, load \`df = pd.read_csv(csv_files[0])\`.\n` +
         `   - Dynamically identify numeric feature columns and target label column without hardcoding fixed names:\n` +
