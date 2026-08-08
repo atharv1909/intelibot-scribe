@@ -1,9 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@supabase/supabase-js";
 
-import { FIREWALL_SYSTEM, askJson, askText, wrapUntrusted } from "./ai.server";
-import { retrieveSources, scanForInjection } from "./research.server";
-import { generateIdeaGraphImpl } from "./idea-graph.server";
+import { FIREWALL_SYSTEM, askJson, askText, wrapUntrusted } from "./ai.server.js";
+import { retrieveSources, scanForInjection } from "./research.server.js";
+import { generateIdeaGraphImpl } from "./idea-graph.server.js";
 
 export type DB = SupabaseClient<any>;
 
