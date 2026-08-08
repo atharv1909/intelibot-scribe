@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { handlePipelineAction } from "../src/lib/pipeline.server";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -19,7 +20,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    const { handlePipelineAction } = await import("../src/lib/pipeline.server");
     const result = await handlePipelineAction(body);
     return res.status(200).json({ ok: true, result });
   } catch (err: any) {
