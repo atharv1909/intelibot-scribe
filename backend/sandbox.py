@@ -71,11 +71,21 @@ def create_sandbox_session(timeout_seconds: int = 900) -> Sandbox:
         envs={"KAGGLE_API_TOKEN": os.getenv("KAGGLE_API_TOKEN", os.getenv("KAGGLE_API_KEY", ""))}
     )
 
-def execute_on_sandbox_session(sbx: Sandbox, python_code: str) -> dict:
-    """Executes code on an existing sandbox session without killing it."""
+def execute_on_sandbox_session(sbx: Sandbox, python_code: str, step_timeout: int = 850) -> dict:
+    """
+    Executes code on an existing sandbox session without killing it.
+
+    NOTE: E2B's run_code() has its OWN execution timeout, separate from the
+    sandbox session's wall-clock lifetime (the 900s passed to Sandbox.create()).
+    The run_code default is only ~60s, which is why real PyTorch training /
+    data-processing steps were getting killed with "Execution timed out" even
+    though the session itself had 800+ seconds left. We now pass an explicit
+    step_timeout so a single code execution can use most of the session's
+    wall clock, leaving a small safety margin for sandbox teardown/logging.
+    """
     code_to_run = prepare_code_with_auto_install(python_code)
-    logger.info("Executing code step in sandbox session...")
-    execution = sbx.run_code(code_to_run)
+    logger.info(f"Executing code step in sandbox session (timeout={step_timeout}s)...")
+    execution = sbx.run_code(code_to_run, timeout=step_timeout)
     stdout = "\n".join(execution.logs.stdout)
     stderr = "\n".join(execution.logs.stderr)
     return {
@@ -103,7 +113,10 @@ def run_code_in_sandbox(python_code: str, timeout_seconds: int = 900) -> dict:
             timeout=timeout_seconds,
             envs={"KAGGLE_API_TOKEN": os.getenv("KAGGLE_API_TOKEN", os.getenv("KAGGLE_API_KEY", ""))}
         )
-        res = execute_on_sandbox_session(sbx, python_code)
+        # Leave a small safety margin under the session timeout for
+        # sandbox teardown / result-collection to complete.
+        step_timeout = max(30, timeout_seconds - 50)
+        res = execute_on_sandbox_session(sbx, python_code, step_timeout=step_timeout)
         return res
     except Exception as e:
         logger.error(f"E2B Cloud Sandbox execution failed: {e}")
