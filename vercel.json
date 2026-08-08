@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/pipeline.ts": {
-      "includeFiles": "src/lib/**"
+      "includeFiles": "src/**"
     }
   }
 }

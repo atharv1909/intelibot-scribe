@@ -4,6 +4,7 @@ import { FIREWALL_SYSTEM, askJson, askText, wrapUntrusted } from "./ai.server";
 import { retrieveSources, scanForInjection } from "./research.server";
 import { generateIdeaGraphImpl } from "./idea-graph.server";
 import type { Database, Json } from "../../src/integrations/supabase/types";
+import { getAuthenticatedContext } from "../../src/integrations/supabase/auth-middleware";
 
 export type DB = SupabaseClient<Database>;
 
@@ -1165,7 +1166,6 @@ export async function theoryImpl(db: DB, userId: string, projectId: string) {
 }
 
 export async function handlePipelineAction(payload: any) {
-  const { getAuthenticatedContext } = await import("../../src/integrations/supabase/auth-middleware");
   const { supabase, userId } = await getAuthenticatedContext();
 
   const action = payload?.action;
