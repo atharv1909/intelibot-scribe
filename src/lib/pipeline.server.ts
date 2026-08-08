@@ -435,17 +435,18 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `SELECTED IDEA:\n${idea.title}\n${idea.summary ?? ""}\n\n` +
         `APPROVED PSEUDOCODE:\n${pseudo.content.slice(0, 9000)}\n\n` +
         `STRICT IMPLEMENTATION REQUIREMENTS:\n` +
-        `1. MATCH THE DOMAIN EXACTLY:\n` +
-        `   - If the research is about Computer Vision / Diffusion / 3DGS / Neural Rendering: Implement a complete PyTorch model (e.g. UNet, Diffusion forward/reverse process, Gaussian Splatting / NeRF MLP) operating on synthetic or domain-matched tensor/image datasets using PyTorch (\`import torch\`).\n` +
-        `   - If the research is about Tabular ML or Data Mining: Use Kaggle API (\`import kaggle\`) with keyword search derived directly from "${project.prompt.slice(0, 100)}", or load the user-provided dataset if mentioned in the prompt.\n` +
-        `   - NEVER fall back to unrelated datasets (such as heart failure, iris, or titanic) if the prompt is about Diffusion, Vision, NLP, or 3D Rendering!\n\n` +
-        `2. REAL METRICS EXECUTION & STDOUT JSON:\n` +
+        `1. DATASET ACQUISITION (ABSOLUTELY MANDATORY):\n` +
+        `   - You MUST dynamically search and download a REAL dataset from Kaggle using the Python Kaggle API: \`import kaggle\` -> \`kaggle.api.dataset_download_cli(dataset_name, unzip=True)\`.\n` +
+        `   - YOU ARE STRICTLY FORBIDDEN from creating fake arrays, dummy dictionaries (\`patient_data = {...}\`), or assuming data exists.\n` +
+        `   - NEVER fall back to unrelated datasets (such as heart failure, MIMIC-IV, iris, or titanic) if the prompt is about Diffusion, Vision, NLP, or 3D Rendering!\n\n` +
+        `2. REAL METRICS EXECUTION & STDOUT JSON (ABSOLUTELY MANDATORY):\n` +
+        `   - You MUST compute actual validation/test metrics by running your implemented model's forward pass on the real downloaded test data.\n` +
+        `   - CRITICAL PROHIBITION: YOU ARE STRICTLY FORBIDDEN from writing \`accuracy = 0.9\`, \`precision = 0.8\`, or any other hardcoded fallback numbers.\n` +
         `   - At the end of execution, print ACTUAL REAL metrics computed directly from model evaluation into STDOUT as JSON:\n` +
-        `     \`print(json.dumps({"loss": float(final_loss), "accuracy": float(acc), ...}))\`\n` +
-        `   - DO NOT fabricate, hallucinate, or hardcode static numbers.\n\n` +
+        `     \`print(json.dumps({"loss": float(final_loss), "accuracy": float(acc), ...}))\`\n\n` +
         `3. DEPENDENCIES & COMPATIBILITY:\n` +
-        `   - Do NOT use \`pip install\` or \`subprocess.run\` in code. Use standard imports (\`torch\`, \`torch.nn\`, \`torchvision\`, \`numpy\`, \`scipy\`, \`sklearn\`, \`kaggle\`, \`PIL\`).\n` +
-        `   - Keep model size reasonable so it executes smoothly on CPU/GPU.\n` +
+        `   - Do NOT use \`pip install\` or \`subprocess.run\` in code. Use standard imports (\`torch\`, \`torch.nn\`, \`torchvision\`, \`numpy\`, \`scipy\`, \`sklearn\`, \`kaggle\`, \`pandas\`, \`PIL\`).\n` +
+        `   - Keep model size reasonable (e.g. 1-2 epochs, small batch size) so it executes smoothly and quickly on CPU/GPU.\n` +
         `   - Set deterministic seeds (\`torch.manual_seed(42)\`, \`np.random.seed(42)\`).\n\n` +
         `Return PURE RUNNABLE PYTHON CODE ONLY inside a markdown python block.`,
     },
