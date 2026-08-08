@@ -455,20 +455,16 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `1. OUTPUT FORMAT (ABSOLUTELY MANDATORY):\n` +
         `   - Return ONLY a single markdown \`\`\`python code block containing 100% executable Python.\n` +
         `   - DO NOT write any introductory or concluding conversational text, notes, or explanations outside the code block.\n\n` +
-        `2. REAL KAGGLE DATASET DOWNLOAD (ABSOLUTELY MANDATORY):\n` +
-        `   - You MUST specify a REAL, PUBLIC, POPULAR Kaggle dataset slug matched to "${project.prompt.slice(0, 100)}".\n` +
-        `     Examples of valid real Kaggle slugs:\n` +
-        `     * Cardiovascular / Heart Disease: "ronitf/heart-disease-uci" or "rashikrahmanpritom/heart-attack-analysis-prediction-dataset"\n` +
-        `     * Vision / Diffusion / Images: "zalando-research/fashion-mnist" or "paultimothymooney/chest-xray-pneumonia"\n` +
-        `     * NLP / Text: "lakshmi25npathi/imdb-dataset-of-50k-movie-reviews"\n` +
-        `     * Tabular ML: "uciml/pima-indians-diabetes-database"\n` +
-        `   - DO NOT write literal placeholder strings like "owner/dataset-slug". You MUST use an actual real Kaggle slug string!\n` +
-        `   - Download using: \`kaggle.api.dataset_download_files("real_owner/real_slug", path="./data", unzip=True)\`.\n` +
+        `2. REAL DATASET DOWNLOAD WITH PUBLIC URL FALLBACK (ABSOLUTELY MANDATORY):\n` +
+        `   - Attempt downloading a real Kaggle dataset first using positional syntax: \`kaggle.api.dataset_download_files("ronitf/heart-disease-uci", path="./data", unzip=True)\`.\n` +
         `   - CRITICAL: NEVER pass \`dataset_name=...\` as a keyword argument.\n` +
-        `   - YOU ARE STRICTLY FORBIDDEN FROM GENERATING SYNTHETIC / DUMMY RANDOM DATAFRAMES OR FAKE DATA ARRAYS. Use real downloaded data!\n\n` +
+        `   - Wrap Kaggle download in a \`try ... except Exception:\` block.\n` +
+        `   - If Kaggle returns 403 Forbidden (due to missing or unauthenticated Kaggle API key), ALWAYS fall back to reading the EXACT SAME REAL published dataset directly from a public GitHub raw / OpenML URL, for example:\n` +
+        `     \`df = pd.read_csv("https://raw.githubusercontent.com/jbrownlee/Datasets/master/heart.csv")\` (or domain-matched public raw dataset URL).\n` +
+        `   - YOU ARE STRICTLY FORBIDDEN FROM GENERATING RANDOM DUMMY DATAFRAMES OR SYNTHETIC ARRAYS. Always load real dataset rows!\n\n` +
         `3. BULLETPROOF DATA LOADING & PREPROCESSING:\n` +
-        `   - Import \`glob\` and dynamically find unzipped CSV files: \`csv_files = glob.glob("./data/**/*.csv", recursive=True)\` and load \`df = pd.read_csv(csv_files[0])\`.\n` +
-        `   - Dynamically identify numeric feature columns and target label column without hardcoding column names that might differ across datasets:\n` +
+        `   - Import \`glob\` and dynamically discover downloaded CSV files if available: \`csv_files = glob.glob("./data/**/*.csv", recursive=True)\`; if \`csv_files\`, load \`df = pd.read_csv(csv_files[0])\`.\n` +
+        `   - Dynamically identify numeric feature columns and target label column without hardcoding fixed names:\n` +
         `     \`num_cols = df.select_dtypes(include=[np.number]).columns.tolist()\`; \`target_col = 'target' if 'target' in num_cols else ('output' if 'output' in num_cols else num_cols[-1])\`.\n` +
         `   - Convert features & labels cleanly into float32 PyTorch tensors: \`X = df[[c for c in num_cols if c != target_col]].fillna(0).values.astype(np.float32)\`.\n\n` +
         `4. REAL MODEL TRAINING & REAL COMPUTED METRICS:\n` +
@@ -598,11 +594,16 @@ for _mod, _pip in _NEEDED_PACKAGES.items():
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", _pip], check=False)
 
 _kkey = os.environ.get("KAGGLE_KEY") or os.environ.get("KAGGLE_API_TOKEN") or os.environ.get("KAGGLE_API_KEY")
-if _kkey:
+if _kkey and not _kkey.startswith("KGAT_"):
     os.environ["KAGGLE_KEY"] = _kkey
     os.environ["KAGGLE_API_TOKEN"] = _kkey
     if not os.environ.get("KAGGLE_USERNAME"):
         os.environ["KAGGLE_USERNAME"] = "intelibot"
+else:
+    # Remove dummy token if present to prevent Kaggle 403 Forbidden errors
+    os.environ.pop("KAGGLE_KEY", None)
+    os.environ.pop("KAGGLE_API_TOKEN", None)
+    os.environ.pop("KAGGLE_API_KEY", None)
 `;
 
       const codeToRun = `${autoInstallHeader}\n\n${cleanCode}`;
