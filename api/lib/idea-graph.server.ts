@@ -1,4 +1,4 @@
-import { askJson, wrapUntrusted } from "./ai.server";
+import { askJson, wrapUntrusted } from "./ai.server.js";
 
 export type GraphNode = {
   id: string;
