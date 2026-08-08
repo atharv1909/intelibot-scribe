@@ -30,7 +30,7 @@ const projectInput = z.object({ projectId: z.string().uuid() });
 
 export const createRun = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z
       .object({
         prompt: z.string().min(3).max(4000),
@@ -45,17 +45,17 @@ export const createRun = createServerFn({ method: "POST" })
 
 export const runResearch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => runResearchImpl(context.supabase, context.userId, data.projectId));
 
 export const surfaceIdeas = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => surfaceIdeasImpl(context.supabase, context.userId, data.projectId));
 
 export const selectIdea = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z
       .object({
         projectId: z.string().uuid(),
@@ -69,27 +69,27 @@ export const selectIdea = createServerFn({ method: "POST" })
 
 export const formulateIdea = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => formulateImpl(context.supabase, context.userId, data.projectId));
 
 export const generatePseudocode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => pseudocodeImpl(context.supabase, context.userId, data.projectId));
 
 export const generateIdeaGraph = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => generateIdeaGraphImpl(context.supabase, context.userId, data.projectId));
 
 export const generateCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => codeImpl(context.supabase, context.userId, data.projectId));
 
 export const reviewArtifact = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z
       .object({
         projectId: z.string().uuid(),
@@ -104,22 +104,22 @@ export const reviewArtifact = createServerFn({ method: "POST" })
 
 export const executeRun = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => executeImpl(context.supabase, context.userId, data.projectId));
 
 export const rerunExperiment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => rerunImpl(context.supabase, context.userId, data.projectId));
 
 export const proposeArchitectureChange = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => architectureProposalImpl(context.supabase, context.userId, data.projectId));
 
 export const decideArchitectureChange = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z
       .object({ projectId: z.string().uuid(), approved: z.boolean(), change: z.string().max(4000) })
       .parse(d),
@@ -128,30 +128,30 @@ export const decideArchitectureChange = createServerFn({ method: "POST" })
 
 export const generatePaper = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => paperImpl(context.supabase, context.userId, data.projectId));
 
 export const runPlagiarismCheck = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => runPlagiarismCheckImpl(context.supabase, context.userId, data.projectId));
 
 export const distillMemory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => distillMemoryImpl(context.supabase, context.userId, data.projectId));
 
 export const runTheoryBranch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => theoryImpl(context.supabase, context.userId, data.projectId));
 
 export const getSupervisorStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => supervisorAssessHealth(context.supabase, context.userId, data.projectId));
 
 export const triggerSupervisorAdvance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => projectInput.parse(d))
+  .validator((d: unknown) => projectInput.parse(d))
   .handler(({ data, context }) => supervisorAutoAdvance(context.supabase, context.userId, data.projectId));
