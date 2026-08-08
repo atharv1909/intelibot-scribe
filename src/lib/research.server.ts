@@ -113,7 +113,57 @@ async function searchCrossref(query: string, limit: number): Promise<RetrievedSo
         url: item.URL ?? "",
         doi: item.DOI ?? null,
         abstract,
-        retrieval_method: "dense" as const,
+        retrieval_method: "keyword" as const,
+        retrieved_at: new Date().toISOString(),
+        ...tag(`${title}\n${abstract}`),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+type SemanticScholarItem = {
+  paperId?: string;
+  title?: string;
+  abstract?: string;
+  venue?: string;
+  year?: number;
+  url?: string;
+  externalIds?: { DOI?: string; ArXiv?: string };
+  authors?: Array<{ name?: string }>;
+};
+
+async function searchSemanticScholar(query: string, limit: number): Promise<RetrievedSource[]> {
+  try {
+    const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(
+      query,
+    )}&limit=${limit}&fields=title,authors,venue,year,url,externalIds,abstract`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "intelibot-scribe-pipeline/1.0" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { data?: SemanticScholarItem[] };
+    return (json.data ?? []).map((item) => {
+      const title = strip(item.title ?? "Untitled");
+      const abstract = strip(item.abstract ?? "");
+      const authors = (item.authors ?? [])
+        .slice(0, 6)
+        .map((a) => a.name ?? "")
+        .filter(Boolean)
+        .join(", ");
+      const doi = item.externalIds?.DOI ?? null;
+      const paperUrl = item.url ?? (doi ? `https://doi.org/${doi}` : "");
+      return {
+        title,
+        authors,
+        venue: strip(item.venue || "Semantic Scholar"),
+        year: item.year ?? null,
+        url: paperUrl,
+        doi,
+        abstract,
+        retrieval_method: "keyword" as const,
         retrieved_at: new Date().toISOString(),
         ...tag(`${title}\n${abstract}`),
       };
@@ -162,16 +212,24 @@ async function embed(inputs: string[]): Promise<number[][] | null> {
   });
 }
 
-/** Keyword + dense hybrid retrieval across arXiv and Crossref with zero-hang fallback. */
+/** Keyword + dense hybrid retrieval across arXiv, Crossref, and Semantic Scholar with zero-hang fallback. */
 export async function retrieveSources(
   queries: string[],
   perQuery = 6,
 ): Promise<Array<RetrievedSource & { relevance: number }>> {
-  const batches = await Promise.all(
-    queries.flatMap((q) => [searchArxiv(q, perQuery), searchCrossref(q, perQuery)]),
-  );
+  const fetchAll = (qList: string[]) =>
+    Promise.all(
+      qList.flatMap((q) => [
+        searchArxiv(q, perQuery),
+        searchCrossref(q, perQuery),
+        searchSemanticScholar(q, perQuery),
+      ]),
+    );
+
+  let batches = await fetchAll(queries);
   const seen = new Set<string>();
   const merged: RetrievedSource[] = [];
+
   for (const batch of batches) {
     for (const item of batch) {
       const key = (item.doi ?? item.title).toLowerCase().trim();
@@ -181,50 +239,34 @@ export async function retrieveSources(
     }
   }
 
-  // Guaranteed literature fallback if external APIs timed out or returned empty
+  // Broadened query retry if all 3 external APIs return empty
   if (!merged.length) {
-    const topic = queries[0] ?? "chest disease research";
-    merged.push(
-      {
-        title: `Deep Learning Diagnostics for Chest X-Ray and Pulmonary Pathology: A Comprehensive Benchmark`,
-        authors: "Rajpurkar, P., Irvin, J., Zhu, K., Yang, B., Mehta, H., Ng, A. Y.",
-        venue: "PLOS Medicine / arXiv",
-        year: 2023,
-        url: "https://arxiv.org/abs/1711.05225",
-        doi: "10.1371/journal.pmed.1002686",
-        abstract: `Automated detection of chest disease (pneumonia, cardiomegaly, effusion, pulmonary edema) using deep convolutional neural networks and vision transformers trained on CheXpert and NIH ChestX-ray14 benchmark datasets. Evaluates radiologist-level performance with uncertainty metrics.`,
-        retrieval_method: "dense",
-        injection_flag: false,
-        injection_detail: null,
-        retrieved_at: new Date().toISOString(),
-      },
-      {
-        title: `Multi-Modal Clinical Transformers for Cardiorespiratory and Pulmonary Risk Stratification`,
-        authors: "Johnson, A. E., Pollard, T. J., Shen, L., Lehman, L. W., Feng, M., Mark, R. G.",
-        venue: "Nature Digital Medicine",
-        year: 2024,
-        url: "https://doi.org/10.1038/s41746-023-00912-w",
-        doi: "10.1038/s41746-023-00912-w",
-        abstract: `Integrating electronic health records, tabular clinical parameters, and thoracic imaging for early identification of acute respiratory distress syndrome and myocardial ischemia. Demonstrates robust out-of-distribution generalization across diverse patient cohorts.`,
-        retrieval_method: "keyword",
-        injection_flag: false,
-        injection_detail: null,
-        retrieved_at: new Date().toISOString(),
-      },
-      {
-        title: `Explainable AI in Thoracic Radiography: Attention Maps and Saliency Guided Diagnostics`,
-        authors: "Wang, X., Peng, Y., Lu, L., Lu, Z., Bagheri, M., Summers, R. M.",
-        venue: "IEEE Transactions on Medical Imaging",
-        year: 2022,
-        url: "https://doi.org/10.1109/TMI.2022.3184901",
-        doi: "10.1109/TMI.2022.3184901",
-        abstract: `Classifying 14 thoracic disease categories with weak supervision and visual saliency map localization. Provides quantitative evaluations of model interpretability for clinical decision support.`,
-        retrieval_method: "dense",
-        injection_flag: false,
-        injection_detail: null,
-        retrieved_at: new Date().toISOString(),
-      },
-    );
+    const rawTopic = queries[0] ?? "";
+    const stopWords = new Set(["the", "a", "an", "and", "or", "in", "of", "to", "for", "with", "on", "at", "by", "from", "how", "what", "why"]);
+    const words = rawTopic
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !stopWords.has(w))
+      .slice(0, 3);
+
+    if (words.length > 0) {
+      const broadenedQuery = words.join(" ");
+      batches = await fetchAll([broadenedQuery]);
+      for (const batch of batches) {
+        for (const item of batch) {
+          const key = (item.doi ?? item.title).toLowerCase().trim();
+          if (!item.title || seen.has(key)) continue;
+          seen.add(key);
+          merged.push(item);
+        }
+      }
+    }
+  }
+
+  // If still empty after broadened retry, return empty array (caller runResearchImpl throws honestly)
+  if (!merged.length) {
+    return [];
   }
 
   const queryText = queries.join(" ; ");

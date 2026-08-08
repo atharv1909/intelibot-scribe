@@ -442,6 +442,7 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
 
   const project = await loadProject(db, projectId);
   const idea = await selectedIdea(db, projectId);
+  const topicKw = project.prompt.slice(0, 40).replace(/[^a-zA-Z0-9 ]/g, '').trim() || "research";
 
   const text = await askText([
     { role: "system", content: FIREWALL_SYSTEM },
@@ -456,24 +457,29 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `1. OUTPUT FORMAT (ABSOLUTELY MANDATORY):\n` +
         `   - Return ONLY a single markdown \`\`\`python code block containing 100% executable Python.\n` +
         `   - DO NOT write any introductory or concluding conversational text, notes, or explanations outside the code block.\n\n` +
-        `2. DYNAMIC KAGGLE TOPIC SEARCH & DATASET ACQUISITION (ABSOLUTELY MANDATORY):\n` +
-        `   - CATEGORY A: Empirical / Clinical / Tabular / Vision / NLP Benchmark Domains (Where Data Exists):\n` +
-        `     * You MUST acquire a REAL published dataset strictly matched to the user's research domain ("${project.prompt.slice(0, 80)}"). Synthetic data is STRICTLY BANNED.\n` +
-        `     * Use Kaggle API to DYNAMICALLY SEARCH for the top active dataset matching the research topic keyword:\n` +
-        `       \`results = kaggle.api.dataset_list(search="topic_keyword", sort_by="hottest")\`\n` +
+        `2. DYNAMIC DOMAIN DATASET ACQUISITION (ABSOLUTELY MANDATORY):\n` +
+        `   - CATEGORY A: Empirical / Tabular / Vision / NLP / Biological / Financial Benchmark Domains (Where Data Exists):\n` +
+        `     * You MUST dynamically acquire a REAL published dataset strictly matched to the user's research domain ("${project.prompt.slice(0, 80)}"). Hardcoded unrelated datasets or hardcoded URLs are STRICTLY BANNED.\n` +
+        `     * Tier 1: Search Kaggle API dynamically using topic keyword "${topicKw}":\n` +
+        `       \`results = kaggle.api.dataset_list(search="${topicKw}", sort_by="hottest")\`\n` +
         `       \`if results: top_slug = results[0].ref\` -> \`kaggle.api.dataset_download_files(top_slug, path="./data", unzip=True)\`\n` +
-        `     * NEVER hardcode deleted or dead dataset slugs. Search dynamically or use verified active slugs.\n` +
-        `     * If Kaggle API fails/returns empty, fall back to trying a list of active public raw CSV URLs matching "${project.prompt.slice(0, 60)}".\n` +
-        `   - CATEGORY B: Theoretical AI, Custom Latent Embeddings, Novel Math Operators, or Synthetic Latent Spaces (Where No Kaggle Dataset Exists):\n` +
+        `     * Tier 2: If Kaggle fails/returns empty, search Hugging Face Datasets API dynamically via HTTP request:\n` +
+        `       \`hf_res = requests.get(f"https://huggingface.co/api/datasets?search=${topicKw}&limit=5").json()\`\n` +
+        `       \`if hf_res: ds_name = hf_res[0]['id']\` -> \`df = datasets.load_dataset(ds_name).to_pandas()\`\n` +
+        `     * Tier 3 (If both Kaggle and Hugging Face return no matching datasets for an empirical topic):\n` +
+        `       Print an honest JSON output and exit cleanly:\n` +
+        `       \`print(json.dumps({"status": "no_dataset_found", "note": "No published dataset matched this topic via Kaggle or Hugging Face."}))\`\n` +
+        `       Do NOT substitute an unrelated hardcoded dataset.\n` +
+        `   - CATEGORY B: Theoretical AI, Custom Latent Embeddings, Novel Math Operators, or Synthetic Latent Spaces (Where No External Dataset Exists):\n` +
         `     * Synthesize clean, structured PyTorch tensors (e.g. \`embeddings = torch.randn(250, 512)\`) that directly represent the theoretical embedding/latent space.\n\n` +
-        `3. BULLETPROOF DATA ACQUISITION & NULL-SAFE PREPROCESSING:\n` +
-        `   - Write strict, defensive Python dataset acquisition logic. \`df = None\` MUST be declared at the VERY TOP before any API calls or try blocks:\n` +
+        `3. BULLETPROOF PREPROCESSING & MODEL IMPLEMENTATION:\n` +
+        `   - Write defensive Python dataset acquisition logic. \`df = None\` MUST be declared at the VERY TOP before any API calls:\n` +
         `     \`\`\`python\n` +
         `     df = None  # MANDATORY: MUST BE DECLARED FIRST\n` +
+        `     topic_kw = "${topicKw}"\n` +
         `     try:\n` +
-        `         import kaggle\n` +
-        `         topic_kw = "${project.prompt.slice(0, 40).replace(/[^a-zA-Z0-9 ]/g, '').trim()}"\n` +
-        `         results = kaggle.api.dataset_list(search=topic_kw if topic_kw else "clinical", sort_by="hottest")\n` +
+        `         import kaggle, glob, os, json, sys, requests, pandas as pd, numpy as np, torch, torch.nn as nn\n` +
+        `         results = kaggle.api.dataset_list(search=topic_kw, sort_by="hottest")\n` +
         `         if results:\n` +
         `             top_slug = results[0].ref\n` +
         `             kaggle.api.dataset_download_files(top_slug, path="./data", unzip=True)\n` +
@@ -481,37 +487,25 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `             if csv_files:\n` +
         `                 df = pd.read_csv(csv_files[0])\n` +
         `     except Exception as e:\n` +
-        `         print(f"Kaggle search note: {e}")\n\n` +
+        `         print(f"Kaggle acquisition note: {e}")\n\n` +
         `     if df is None or len(df) == 0:\n` +
-        `         urls = [\n` +
-        `             "https://raw.githubusercontent.com/selva86/datasets/master/HeartDisease.csv",\n` +
-        `             "https://raw.githubusercontent.com/datasets/heart-disease/main/data/heart-disease.csv"\n` +
-        `         ]\n` +
-        `         for u in urls:\n` +
-        `             try:\n` +
-        `                 df = pd.read_csv(u)\n` +
-        `                 if df is not None and len(df) > 0:\n` +
-        `                     break\n` +
-        `             except Exception:\n` +
-        `                 continue\n\n` +
-        `     if df is None or len(df) == 0:\n` +
-        `         from sklearn.datasets import load_breast_cancer, load_diabetes\n` +
         `         try:\n` +
-        `             ds = load_breast_cancer()\n` +
-        `             df = pd.DataFrame(ds.data, columns=ds.feature_names)\n` +
-        `             df['target'] = ds.target\n` +
-        `         except Exception:\n` +
-        `             ds = load_diabetes()\n` +
-        `             df = pd.DataFrame(ds.data, columns=ds.feature_names)\n` +
-        `             df['target'] = ds.target\n\n` +
-        `     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()\n` +
-        `     target_col = 'target' if 'target' in num_cols else ('output' if 'output' in num_cols else num_cols[-1])\n` +
-        `     feature_cols = [c for c in num_cols if c != target_col]\n` +
-        `     X = df[feature_cols].fillna(0).values.astype(np.float32)\n` +
-        `     y = df[target_col].fillna(0).values.astype(np.float32)\n` +
+        `             import requests, datasets\n` +
+        `             r = requests.get(f"https://huggingface.co/api/datasets?search={topic_kw}&limit=5", timeout=10)\n` +
+        `             if r.ok and len(r.json()) > 0:\n` +
+        `                 top_ds = r.json()[0].get("id")\n` +
+        `                 if top_ds:\n` +
+        `                     hf_data = datasets.load_dataset(top_ds)\n` +
+        `                     split = list(hf_data.keys())[0]\n` +
+        `                     df = hf_data[split].to_pandas()\n` +
+        `         except Exception as e:\n` +
+        `             print(f"Hugging Face acquisition note: {e}")\n\n` +
+        `     if df is None or len(df) == 0:\n` +
+        `         print(json.dumps({"status": "no_dataset_found", "note": f"No published dataset matched topic '{topic_kw}' via Kaggle or Hugging Face."}))\n` +
+        `         sys.exit(0)\n` +
         `     \`\`\`\n` +
-        `   - CRITICAL: NEVER call \`df.select_dtypes\` without declaring \`df = None\` first and verifying \`df is not None\`.\n` +
-        `   - CRITICAL: NEVER use \`pd.number\` (which is invalid). ALWAYS use \`np.number\`.\n\n` +
+        `   - CRITICAL: NEVER call \`df.select_dtypes\` without verifying \`df is not None and len(df) > 0\`.\n` +
+        `   - CRITICAL: ALWAYS use \`np.number\` (never invalid \`pd.number\`).\n\n` +
         `4. REAL DYNAMIC MODEL TRAINING & REAL COMPUTED METRICS:\n` +
         `   - Implement a complete PyTorch model (\`nn.Module\`).\n` +
         `   - CRITICAL: Model MUST accept dynamic input feature dimension (\`in_features = X_train.shape[1]\`) in \`__init__(self, in_features)\`.\n` +

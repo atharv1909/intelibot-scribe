@@ -68,9 +68,9 @@ async function searchArxiv(query: string, limit: number): Promise<RetrievedSourc
         url: link,
         doi,
         abstract: summary,
-        retrieval_method: "keyword",
-        ...tag(`${title} ${summary}`),
+        retrieval_method: "keyword" as const,
         retrieved_at: new Date().toISOString(),
+        ...tag(`${title}\n${summary}`),
       };
     });
   } catch {
@@ -78,51 +78,94 @@ async function searchArxiv(query: string, limit: number): Promise<RetrievedSourc
   }
 }
 
+type CrossrefItem = {
+  title?: string[];
+  author?: Array<{ given?: string; family?: string }>;
+  "container-title"?: string[];
+  issued?: { "date-parts"?: number[][] };
+  URL?: string;
+  DOI?: string;
+  abstract?: string;
+};
+
 async function searchCrossref(query: string, limit: number): Promise<RetrievedSource[]> {
   try {
     const url = `https://api.crossref.org/works?query=${encodeURIComponent(
       query,
-    )}&rows=${limit}&select=title,author,published,URL,DOI,abstract,container-title`;
+    )}&rows=${limit}&select=title,author,container-title,issued,URL,DOI,abstract`;
     const res = await fetch(url, {
-      headers: { "User-Agent": "LatticeResearchAgent/1.0 (mailto:agent@lattice.local)" },
+      headers: { "User-Agent": "intelibot-scribe-pipeline/1.0" },
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return [];
-    const json = (await res.json()) as {
-      message?: {
-        items?: Array<{
-          title?: string[];
-          author?: Array<{ given?: string; family?: string }>;
-          published?: { "date-parts"?: number[][] };
-          URL?: string;
-          DOI?: string;
-          abstract?: string;
-          "container-title"?: string[];
-        }>;
-      };
-    };
-
+    const json = (await res.json()) as { message?: { items?: CrossrefItem[] } };
     return (json.message?.items ?? []).map((item) => {
-      const title = strip(item.title?.[0] ?? "");
+      const title = strip(item.title?.[0] ?? "Untitled");
       const abstract = strip(item.abstract ?? "");
-      const authors = (item.author ?? [])
-        .map((a) => `${a.given ?? ""} ${a.family ?? ""}`.trim())
-        .filter(Boolean)
+      return {
+        title,
+        authors: (item.author ?? [])
+          .slice(0, 6)
+          .map((a) => [a.given, a.family].filter(Boolean).join(" "))
+          .join(", "),
+        venue: strip(item["container-title"]?.[0] ?? "Crossref"),
+        year: item.issued?.["date-parts"]?.[0]?.[0] ?? null,
+        url: item.URL ?? "",
+        doi: item.DOI ?? null,
+        abstract,
+        retrieval_method: "keyword" as const,
+        retrieved_at: new Date().toISOString(),
+        ...tag(`${title}\n${abstract}`),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+type SemanticScholarItem = {
+  paperId?: string;
+  title?: string;
+  abstract?: string;
+  venue?: string;
+  year?: number;
+  url?: string;
+  externalIds?: { DOI?: string; ArXiv?: string };
+  authors?: Array<{ name?: string }>;
+};
+
+async function searchSemanticScholar(query: string, limit: number): Promise<RetrievedSource[]> {
+  try {
+    const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(
+      query,
+    )}&limit=${limit}&fields=title,authors,venue,year,url,externalIds,abstract`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "intelibot-scribe-pipeline/1.0" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { data?: SemanticScholarItem[] };
+    return (json.data ?? []).map((item) => {
+      const title = strip(item.title ?? "Untitled");
+      const abstract = strip(item.abstract ?? "");
+      const authors = (item.authors ?? [])
         .slice(0, 6)
+        .map((a) => a.name ?? "")
+        .filter(Boolean)
         .join(", ");
-      const year = item.published?.["date-parts"]?.[0]?.[0] ?? null;
-      const venue = item["container-title"]?.[0] ?? "Crossref";
+      const doi = item.externalIds?.DOI ?? null;
+      const paperUrl = item.url ?? (doi ? `https://doi.org/${doi}` : "");
       return {
         title,
         authors,
-        venue,
-        year,
-        url: item.URL ?? (item.DOI ? `https://doi.org/${item.DOI}` : ""),
-        doi: item.DOI ?? null,
+        venue: strip(item.venue || "Semantic Scholar"),
+        year: item.year ?? null,
+        url: paperUrl,
+        doi,
         abstract,
-        retrieval_method: "keyword",
-        ...tag(`${title} ${abstract}`),
+        retrieval_method: "keyword" as const,
         retrieved_at: new Date().toISOString(),
+        ...tag(`${title}\n${abstract}`),
       };
     });
   } catch {
@@ -131,7 +174,6 @@ async function searchCrossref(query: string, limit: number): Promise<RetrievedSo
 }
 
 function cosine(a: number[], b: number[]): number {
-  if (a.length !== b.length) return 0;
   let dot = 0;
   let na = 0;
   let nb = 0;
@@ -170,16 +212,24 @@ async function embed(inputs: string[]): Promise<number[][] | null> {
   });
 }
 
-/** Keyword + dense hybrid retrieval across arXiv and Crossref with zero-hang fallback. */
+/** Keyword + dense hybrid retrieval across arXiv, Crossref, and Semantic Scholar with zero-hang fallback. */
 export async function retrieveSources(
   queries: string[],
   perQuery = 6,
 ): Promise<Array<RetrievedSource & { relevance: number }>> {
-  const batches = await Promise.all(
-    queries.flatMap((q) => [searchArxiv(q, perQuery), searchCrossref(q, perQuery)]),
-  );
+  const fetchAll = (qList: string[]) =>
+    Promise.all(
+      qList.flatMap((q) => [
+        searchArxiv(q, perQuery),
+        searchCrossref(q, perQuery),
+        searchSemanticScholar(q, perQuery),
+      ]),
+    );
+
+  let batches = await fetchAll(queries);
   const seen = new Set<string>();
   const merged: RetrievedSource[] = [];
+
   for (const batch of batches) {
     for (const item of batch) {
       const key = (item.doi ?? item.title).toLowerCase().trim();
@@ -189,64 +239,45 @@ export async function retrieveSources(
     }
   }
 
+  // Broadened query retry if all 3 external APIs return empty
   if (!merged.length) {
-    const topic = queries[0] ?? "chest disease research";
-    merged.push(
-      {
-        title: `Deep Learning Diagnostics for Chest X-Ray and Pulmonary Pathology: A Comprehensive Benchmark`,
-        authors: "Rajpurkar, P., Irvin, J., Zhu, K., Yang, B., Mehta, H., Ng, A. Y.",
-        venue: "PLOS Medicine / arXiv",
-        year: 2023,
-        url: "https://arxiv.org/abs/1711.05225",
-        doi: "10.1371/journal.pmed.1002686",
-        abstract: `Automated detection of chest disease (pneumonia, cardiomegaly, effusion, pulmonary edema) using deep convolutional neural networks and vision transformers trained on CheXpert and NIH ChestX-ray14 benchmark datasets. Evaluates radiologist-level performance with uncertainty metrics.`,
-        retrieval_method: "dense",
-        injection_flag: false,
-        injection_detail: null,
-        retrieved_at: new Date().toISOString(),
-      },
-      {
-        title: `Multi-Modal Clinical Transformers for Cardiorespiratory and Pulmonary Risk Stratification`,
-        authors: "Johnson, A. E., Pollard, T J., Shen, L., Lehman, L. W., Feng, M., Mark, R. G.",
-        venue: "Nature Digital Medicine",
-        year: 2024,
-        url: "https://doi.org/10.1038/s41746-023-00912-w",
-        doi: "10.1038/s41746-023-00912-w",
-        abstract: `Integrating electronic health records, tabular clinical parameters, and thoracic imaging for early identification of acute respiratory distress syndrome and myocardial ischemia. Demonstrates robust out-of-distribution generalization across diverse patient cohorts.`,
-        retrieval_method: "keyword",
-        injection_flag: false,
-        injection_detail: null,
-        retrieved_at: new Date().toISOString(),
-      },
-      {
-        title: `Explainable AI in Thoracic Radiography: Attention Maps and Saliency Guided Diagnostics`,
-        authors: "Wang, X., Peng, Y., Lu, L., Lu, Z., Bagheri, M., Summers, R. M.",
-        venue: "IEEE Transactions on Medical Imaging",
-        year: 2022,
-        url: "https://doi.org/10.1109/TMI.2022.3184901",
-        doi: "10.1109/TMI.2022.3184901",
-        abstract: `Classifying 14 thoracic disease categories with weak supervision and visual saliency map localization. Provides quantitative evaluations of model interpretability for clinical decision support.`,
-        retrieval_method: "dense",
-        injection_flag: false,
-        injection_detail: null,
-        retrieved_at: new Date().toISOString(),
+    const rawTopic = queries[0] ?? "";
+    const stopWords = new Set(["the", "a", "an", "and", "or", "in", "of", "to", "for", "with", "on", "at", "by", "from", "how", "what", "why"]);
+    const words = rawTopic
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !stopWords.has(w))
+      .slice(0, 3);
+
+    if (words.length > 0) {
+      const broadenedQuery = words.join(" ");
+      batches = await fetchAll([broadenedQuery]);
+      for (const batch of batches) {
+        for (const item of batch) {
+          const key = (item.doi ?? item.title).toLowerCase().trim();
+          if (!item.title || seen.has(key)) continue;
+          seen.add(key);
+          merged.push(item);
+        }
       }
-    );
+    }
   }
 
-  const queryText = queries.join(" ");
-  const embeds = await embed([queryText, ...merged.map((s) => `${s.title} ${s.abstract}`)]);
-  const qv = embeds?.[0];
-  const docVecs = embeds?.slice(1) ?? [];
+  // If still empty after broadened retry, return empty array (caller runResearchImpl throws honestly)
+  if (!merged.length) {
+    return [];
+  }
 
-  return merged.map((source, i) => {
-    const v = docVecs[i];
+  const queryText = queries.join(" ; ");
+  const vectors = await embed([queryText, ...merged.map((m) => `${m.title}. ${m.abstract}`)]);
+  const qv = vectors?.[0];
+
+  const scored = merged.map((m, i) => {
+    const v = vectors?.[i + 1];
     const relevance = qv && v ? Number(cosine(qv, v).toFixed(4)) : 0.85;
-    const isDense = i % 2 === 1;
-    return {
-      ...source,
-      retrieval_method: isDense ? "dense" : "keyword",
-      relevance: Math.max(0.65, Math.min(0.99, relevance > 0 ? relevance : 0.85)),
-    };
+    return { ...m, relevance, retrieval_method: (qv && v ? "dense" : m.retrieval_method) as "keyword" | "dense" };
   });
+
+  return scored.sort((a, b) => b.relevance - a.relevance).slice(0, 24);
 }
