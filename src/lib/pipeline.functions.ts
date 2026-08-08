@@ -1,12 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
 const projectInput = z.object({ projectId: z.string().uuid() });
 
+async function getAuth() {
+  const { getAuthenticatedContext } = await import("@/integrations/supabase/auth-middleware");
+  return getAuthenticatedContext();
+}
+
 export const createRun = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) =>
     z
       .object({
@@ -18,29 +20,29 @@ export const createRun = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { createRunImpl } = await import("./pipeline.server");
-    return createRunImpl(context.supabase, context.userId, data);
+    return createRunImpl(supabase, userId, data);
   });
 
 export const runResearch = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { runResearchImpl } = await import("./pipeline.server");
-    return runResearchImpl(context.supabase, context.userId, data.projectId);
+    return runResearchImpl(supabase, userId, data.projectId);
   });
 
 export const surfaceIdeas = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { surfaceIdeasImpl } = await import("./pipeline.server");
-    return surfaceIdeasImpl(context.supabase, context.userId, data.projectId);
+    return surfaceIdeasImpl(supabase, userId, data.projectId);
   });
 
 export const selectIdea = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) =>
     z
       .object({
@@ -51,45 +53,45 @@ export const selectIdea = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { selectIdeaImpl } = await import("./pipeline.server");
-    return selectIdeaImpl(context.supabase, context.userId, data);
+    return selectIdeaImpl(supabase, userId, data);
   });
 
 export const formulateIdea = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { formulateImpl } = await import("./pipeline.server");
-    return formulateImpl(context.supabase, context.userId, data.projectId);
+    return formulateImpl(supabase, userId, data.projectId);
   });
 
 export const generatePseudocode = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { pseudocodeImpl } = await import("./pipeline.server");
-    return pseudocodeImpl(context.supabase, context.userId, data.projectId);
+    return pseudocodeImpl(supabase, userId, data.projectId);
   });
 
 export const generateIdeaGraph = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { generateIdeaGraphImpl } = await import("./idea-graph.server");
-    return generateIdeaGraphImpl(context.supabase, context.userId, data.projectId);
+    return generateIdeaGraphImpl(supabase, userId, data.projectId);
   });
 
 export const generateCode = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { codeImpl } = await import("./pipeline.server");
-    return codeImpl(context.supabase, context.userId, data.projectId);
+    return codeImpl(supabase, userId, data.projectId);
   });
 
 export const reviewArtifact = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) =>
     z
       .object({
@@ -101,91 +103,92 @@ export const reviewArtifact = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { reviewArtifactImpl } = await import("./pipeline.server");
-    return reviewArtifactImpl(context.supabase, context.userId, data);
+    return reviewArtifactImpl(supabase, userId, data);
   });
 
 export const executeRun = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { executeImpl } = await import("./pipeline.server");
-    return executeImpl(context.supabase, context.userId, data.projectId);
+    return executeImpl(supabase, userId, data.projectId);
   });
 
 export const rerunExperiment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { rerunImpl } = await import("./pipeline.server");
-    return rerunImpl(context.supabase, context.userId, data.projectId);
+    return rerunImpl(supabase, userId, data.projectId);
   });
 
 export const proposeArchitectureChange = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { architectureProposalImpl } = await import("./pipeline.server");
-    return architectureProposalImpl(context.supabase, context.userId, data.projectId);
+    return architectureProposalImpl(supabase, userId, data.projectId);
   });
 
 export const decideArchitectureChange = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) =>
     z
       .object({ projectId: z.string().uuid(), approved: z.boolean(), change: z.string().max(4000) })
       .parse(d),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { architectureDecisionImpl } = await import("./pipeline.server");
-    return architectureDecisionImpl(context.supabase, context.userId, data);
+    return architectureDecisionImpl(supabase, userId, data);
   });
 
 export const generatePaper = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { paperImpl } = await import("./pipeline.server");
-    return paperImpl(context.supabase, context.userId, data.projectId);
+    return paperImpl(supabase, userId, data.projectId);
   });
 
 export const runPlagiarismCheck = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { runPlagiarismCheckImpl } = await import("./pipeline.server");
-    return runPlagiarismCheckImpl(context.supabase, context.userId, data.projectId);
+    return runPlagiarismCheckImpl(supabase, userId, data.projectId);
   });
 
 export const distillMemory = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { distillMemoryImpl } = await import("./pipeline.server");
-    return distillMemoryImpl(context.supabase, context.userId, data.projectId);
+    return distillMemoryImpl(supabase, userId, data.projectId);
   });
 
 export const runTheoryBranch = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { theoryImpl } = await import("./pipeline.server");
-    return theoryImpl(context.supabase, context.userId, data.projectId);
+    return theoryImpl(supabase, userId, data.projectId);
   });
 
 export const getSupervisorStatus = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { supervisorAssessHealth } = await import("./supervisor.server");
-    return supervisorAssessHealth(context.supabase, context.userId, data.projectId);
+    return supervisorAssessHealth(supabase, userId, data.projectId);
   });
 
 export const triggerSupervisorAdvance = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((d: unknown) => projectInput.parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabase, userId } = await getAuth();
     const { supervisorAutoAdvance } = await import("./supervisor.server");
-    return supervisorAutoAdvance(context.supabase, context.userId, data.projectId);
+    return supervisorAutoAdvance(supabase, userId, data.projectId);
   });
