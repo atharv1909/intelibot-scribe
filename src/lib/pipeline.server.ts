@@ -458,9 +458,9 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `2. DOMAIN-INTELLIGENT DATASET ACQUISITION (ABSOLUTELY MANDATORY):\n` +
         `   - CATEGORY A: MedTech, Clinical, Tabular, Vision, NLP, or Empirical Benchmark Domains (Where Data Exists):\n` +
         `     * You MUST use REAL published datasets. Synthetic/dummy data is STRICTLY BANNED for these domains.\n` +
-        `     * First attempt Kaggle download with positional syntax: \`kaggle.api.dataset_download_files("owner/real-dataset-slug", path="./data", unzip=True)\` (NEVER pass \`dataset_name=...\`).\n` +
-        `     * Wrap Kaggle in \`try ... except Exception:\`. If Kaggle returns 403 Forbidden or fails, fall back to fetching the REAL dataset directly from a public GitHub raw / OpenML URL:\n` +
-        `       e.g., \`df = pd.read_csv("https://raw.githubusercontent.com/jbrownlee/Datasets/master/heart.csv")\` (or domain-matched public raw CSV URL).\n` +
+        `     * First attempt Kaggle download with positional syntax: \`kaggle.api.dataset_download_files("harishnarayanan82/heart-disease-uci", path="./data", unzip=True)\` (NEVER pass \`dataset_name=...\`).\n` +
+        `     * Wrap Kaggle in \`try ... except Exception:\`. If Kaggle returns an error, fall back to fetching the REAL dataset directly from an active public URL:\n` +
+        `       e.g., \`df = pd.read_csv("https://raw.githubusercontent.com/adrian-prado/Heart-Disease-UCI/master/heart.csv")\`.\n` +
         `   - CATEGORY B: Theoretical AI, Custom Latent Embeddings, Novel Math Operators, or Synthetic Latent Spaces (Where No Kaggle Dataset Exists):\n` +
         `     * Synthesize clean, structured PyTorch tensors (e.g., \`embeddings = torch.randn(250, 512)\`) that directly represent the theoretical embedding/latent space.\n\n` +
         `3. BULLETPROOF DATA LOADING & PREPROCESSING:\n` +
@@ -595,16 +595,21 @@ for _mod, _pip in _NEEDED_PACKAGES.items():
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", _pip], check=False)
 
 _kkey = os.environ.get("KAGGLE_KEY") or os.environ.get("KAGGLE_API_TOKEN") or os.environ.get("KAGGLE_API_KEY")
-if _kkey and not _kkey.startswith("KGAT_"):
+if _kkey:
     os.environ["KAGGLE_KEY"] = _kkey
     os.environ["KAGGLE_API_TOKEN"] = _kkey
     if not os.environ.get("KAGGLE_USERNAME"):
         os.environ["KAGGLE_USERNAME"] = "intelibot"
-else:
-    # Remove dummy token if present to prevent Kaggle 403 Forbidden errors
-    os.environ.pop("KAGGLE_KEY", None)
-    os.environ.pop("KAGGLE_API_TOKEN", None)
-    os.environ.pop("KAGGLE_API_KEY", None)
+    try:
+        import json, pathlib
+        kdir = pathlib.Path.home() / ".kaggle"
+        kdir.mkdir(parents=True, exist_ok=True)
+        kfile = kdir / "kaggle.json"
+        kfile.write_text(json.dumps({"username": os.environ.get("KAGGLE_USERNAME", "intelibot"), "key": _kkey}))
+        os.chmod(kfile, 0o600)
+    except Exception:
+        pass
+
 `;
 
       const codeToRun = `${autoInstallHeader}\n\n${cleanCode}`;
