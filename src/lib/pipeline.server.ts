@@ -455,13 +455,14 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `1. OUTPUT FORMAT (ABSOLUTELY MANDATORY):\n` +
         `   - Return ONLY a single markdown \`\`\`python code block containing 100% executable Python.\n` +
         `   - DO NOT write any introductory or concluding conversational text, notes, or explanations outside the code block.\n\n` +
-        `2. REAL DATASET DOWNLOAD WITH PUBLIC URL FALLBACK (ABSOLUTELY MANDATORY):\n` +
-        `   - Attempt downloading a real Kaggle dataset first using positional syntax: \`kaggle.api.dataset_download_files("ronitf/heart-disease-uci", path="./data", unzip=True)\`.\n` +
-        `   - CRITICAL: NEVER pass \`dataset_name=...\` as a keyword argument.\n` +
-        `   - Wrap Kaggle download in a \`try ... except Exception:\` block.\n` +
-        `   - If Kaggle returns 403 Forbidden (due to missing or unauthenticated Kaggle API key), ALWAYS fall back to reading the EXACT SAME REAL published dataset directly from a public GitHub raw / OpenML URL, for example:\n` +
-        `     \`df = pd.read_csv("https://raw.githubusercontent.com/jbrownlee/Datasets/master/heart.csv")\` (or domain-matched public raw dataset URL).\n` +
-        `   - YOU ARE STRICTLY FORBIDDEN FROM GENERATING RANDOM DUMMY DATAFRAMES OR SYNTHETIC ARRAYS. Always load real dataset rows!\n\n` +
+        `2. DOMAIN-INTELLIGENT DATASET ACQUISITION (ABSOLUTELY MANDATORY):\n` +
+        `   - CATEGORY A: MedTech, Clinical, Tabular, Vision, NLP, or Empirical Benchmark Domains (Where Data Exists):\n` +
+        `     * You MUST use REAL published datasets. Synthetic/dummy data is STRICTLY BANNED for these domains.\n` +
+        `     * First attempt Kaggle download with positional syntax: \`kaggle.api.dataset_download_files("owner/real-dataset-slug", path="./data", unzip=True)\` (NEVER pass \`dataset_name=...\`).\n` +
+        `     * Wrap Kaggle in \`try ... except Exception:\`. If Kaggle returns 403 Forbidden or fails, fall back to fetching the REAL dataset directly from a public GitHub raw / OpenML URL:\n` +
+        `       e.g., \`df = pd.read_csv("https://raw.githubusercontent.com/jbrownlee/Datasets/master/heart.csv")\` (or domain-matched public raw CSV URL).\n` +
+        `   - CATEGORY B: Theoretical AI, Custom Latent Embeddings, Novel Math Operators, or Synthetic Latent Spaces (Where No Kaggle Dataset Exists):\n` +
+        `     * Synthesize clean, structured PyTorch tensors (e.g., \`embeddings = torch.randn(250, 512)\`) that directly represent the theoretical embedding/latent space.\n\n` +
         `3. BULLETPROOF DATA LOADING & PREPROCESSING:\n` +
         `   - Import \`glob\` and dynamically discover downloaded CSV files if available: \`csv_files = glob.glob("./data/**/*.csv", recursive=True)\`; if \`csv_files\`, load \`df = pd.read_csv(csv_files[0])\`.\n` +
         `   - Dynamically identify numeric feature columns and target label column without hardcoding fixed names:\n` +
