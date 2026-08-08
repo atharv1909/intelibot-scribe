@@ -455,33 +455,35 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `1. OUTPUT FORMAT (ABSOLUTELY MANDATORY):\n` +
         `   - Return ONLY a single markdown \`\`\`python code block containing 100% executable Python.\n` +
         `   - DO NOT write any introductory or concluding conversational text, notes, or explanations outside the code block.\n\n` +
-        `2. DOMAIN-MATCHED DATASET ACQUISITION FOR "${project.prompt.slice(0, 150)}" (ABSOLUTELY MANDATORY):\n` +
+        `2. DYNAMIC KAGGLE TOPIC SEARCH & DATASET ACQUISITION (ABSOLUTELY MANDATORY):\n` +
         `   - CATEGORY A: Empirical / Clinical / Tabular / Vision / NLP Benchmark Domains (Where Data Exists):\n` +
-        `     * You MUST select a REAL published dataset matched strictly to the user's research domain ("${project.prompt.slice(0, 80)}"). Synthetic data is STRICTLY BANNED.\n` +
-        `     * First attempt downloading an active, popular Kaggle dataset slug specifically matched to "${project.prompt.slice(0, 80)}":\n` +
-        `       - Heart / Cardio: "rashikrahmanpritom/heart-attack-analysis-prediction-dataset"\n` +
-        `       - Diabetes / Endocrine: "uciml/pima-indians-diabetes-database"\n` +
-        `       - Vision / Medical Imaging: "paultimothymooney/chest-xray-pneumonia" or "zalando-research/fashion-mnist"\n` +
-        `       - NLP / Text / Sentiment: "lakshmi25npathi/imdb-dataset-of-50k-movie-reviews"\n` +
-        `       - Credit / Financial / Tabular: "mlg-ulb/creditcardfraud"\n` +
-        `       Call using positional syntax: \`kaggle.api.dataset_download_files("domain_owner/domain_slug", path="./data", unzip=True)\` (NEVER pass \`dataset_name=...\`).\n` +
-        `     * Wrap Kaggle in \`try ... except Exception:\`. If Kaggle returns 403/404, fall back to trying a list of active public raw CSV URLs matching "${project.prompt.slice(0, 60)}":\n` +
-        `       \`urls = ["https://raw.githubusercontent.com/...", "https://raw.githubusercontent.com/..."]\`\n` +
-        `       \`for u in urls:\` \`try: df = pd.read_csv(u); break\` \`except Exception: pass\`\n` +
+        `     * You MUST acquire a REAL published dataset strictly matched to the user's research domain ("${project.prompt.slice(0, 80)}"). Synthetic data is STRICTLY BANNED.\n` +
+        `     * Use Kaggle API to DYNAMICALLY SEARCH for the top active dataset matching the research topic keyword:\n` +
+        `       \`results = kaggle.api.dataset_list(search="topic_keyword", sort_by="hottest")\`\n` +
+        `       \`if results: top_slug = results[0].ref\` -> \`kaggle.api.dataset_download_files(top_slug, path="./data", unzip=True)\`\n` +
+        `     * NEVER hardcode deleted or dead dataset slugs. Search dynamically or use verified active slugs.\n` +
+        `     * If Kaggle API fails/returns empty, fall back to trying a list of active public raw CSV URLs matching "${project.prompt.slice(0, 60)}".\n` +
         `   - CATEGORY B: Theoretical AI, Custom Latent Embeddings, Novel Math Operators, or Synthetic Latent Spaces (Where No Kaggle Dataset Exists):\n` +
         `     * Synthesize clean, structured PyTorch tensors (e.g. \`embeddings = torch.randn(250, 512)\`) that directly represent the theoretical embedding/latent space.\n\n` +
-        `3. BULLETPROOF DATA ACQUISITION & NULL-SAFE PREPROCESSING:
-   - Write strict, defensive Python dataset acquisition logic. \`df = None\` MUST be declared at the VERY TOP before any API calls or try blocks:
-     \`\`\`python
+        `3. BULLETPROOF DATA ACQUISITION & NULL-SAFE PREPROCESSING:\n` +
+        `   - Write strict, defensive Python dataset acquisition logic. \`df = None\` MUST be declared at the VERY TOP before any API calls or try blocks:\n` +
+     ```python
      df = None  # MANDATORY: MUST BE DECLARED FIRST
      try:
          import kaggle
-         kaggle.api.dataset_download_files("rashikrahmanpritom/heart-attack-analysis-prediction-dataset", path="./data", unzip=True)
+         # Dynamically search Kaggle for top active dataset matching research topic
+         topic_kw = "${project.prompt.slice(0, 40).replace(/[^a-zA-Z0-9 ]/g, '').trim()}"
+         results = kaggle.api.dataset_list(search=topic_kw if topic_kw else "clinical", sort_by="hottest")
+         if results:
+             top_slug = results[0].ref
+             kaggle.api.dataset_download_files(top_slug, path="./data", unzip=True)
+         else:
+             kaggle.api.dataset_download_files("johnsmith88/heart-disease-dataset", path="./data", unzip=True)
          csv_files = glob.glob("./data/**/*.csv", recursive=True)
          if csv_files:
              df = pd.read_csv(csv_files[0])
-     except Exception:
-         pass
+     except Exception as e:
+         print(f"Kaggle search/download note: {e}")
 
      if df is None or len(df) == 0:
          urls = [
