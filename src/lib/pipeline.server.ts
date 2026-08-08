@@ -455,16 +455,16 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `1. OUTPUT FORMAT (ABSOLUTELY MANDATORY):\n` +
         `   - Return ONLY a single markdown \`\`\`python code block containing 100% executable Python.\n` +
         `   - DO NOT write any introductory or concluding conversational text, notes, or explanations outside the code block.\n\n` +
-        `2. BUG-FREE & DOMAIN-MATCHED IMPLEMENTATION:\n` +
-        `   - Match the research prompt ("${project.prompt.slice(0, 150)}"). If the prompt is about Diffusion, Vision, NLP, 3DGS, or Tabular ML, implement PyTorch models for THAT domain.\n` +
-        `   - All variables MUST be explicitly defined. (DO NOT reference undefined variables like \`numerical_features\` or unimported packages).\n` +
-        `   - Convert DataFrames cleanly: \`X = df.select_dtypes(include=[np.number]).fillna(0).values.astype(np.float32)\`.\n` +
-        `   - Ensure PyTorch input layers (\`nn.Linear(X.shape[1], ...)\`), tensor shapes, and loss functions match correctly.\n\n` +
-        `3. DATASET & METRICS COMPUTATION (ABSOLUTELY MANDATORY):\n` +
-        `   - Search/download a real Kaggle dataset (\`import kaggle\` -> \`kaggle.api.dataset_download_cli(...)\`), or generate domain-matched synthetic torch tensors if download is unavailable.\n` +
-        `   - Run model evaluation on the test set and print real computed metrics directly to STDOUT as JSON at the very end of script:\n` +
-        `     \`print(json.dumps({"loss": float(final_loss), "accuracy": float(acc)}))\`\n` +
-        `   - YOU ARE STRICTLY FORBIDDEN from hardcoding static numbers (\`accuracy = 0.9\`).\n\n` +
+        `2. DATASET ACQUISITION WITH SYNTHETIC FALLBACK (MANDATORY):\n` +
+        `   - Attempt Kaggle dataset download using positional argument syntax: \`kaggle.api.dataset_download_files("owner/dataset-slug", path="./data", unzip=True)\`.\n` +
+        `   - CRITICAL PROHIBITION: NEVER pass \`dataset_name=...\` as a keyword argument (it causes TypeError in Kaggle API).\n` +
+        `   - Always wrap Kaggle acquisition in a \`try ... except Exception:\` block. If Kaggle download fails, load synthetic domain-matched PyTorch tensors (e.g. \`X = torch.randn(200, 10)\`, \`y = torch.randint(0, 2, (200, 1))\`) so the script NEVER crashes.\n\n` +
+        `3. BUG-FREE MODEL & REAL METRICS COMPUTATION (MANDATORY):\n` +
+        `   - Match the research prompt ("${project.prompt.slice(0, 150)}"). Implement PyTorch model (\`nn.Module\`), training loop, and evaluation for THAT domain.\n` +
+        `   - Ensure all variables are explicitly defined. Convert DataFrames cleanly: \`X = df.select_dtypes(include=[np.number]).fillna(0).values.astype(np.float32)\`.\n` +
+        `   - Run model evaluation forward pass on test split and print real computed metrics directly to STDOUT as JSON at the very end of script:\n` +
+        `     \`print(json.dumps({"loss": float(loss), "accuracy": float(acc)}))\`\n` +
+        `   - YOU ARE STRICTLY FORBIDDEN from hardcoding static numbers (\`accuracy = 0.9\`) or writing stub functions.\n\n` +
         `Return PURE RUNNABLE PYTHON CODE ONLY inside a markdown python block.`,
     },
   ]);
