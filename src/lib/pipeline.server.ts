@@ -1189,4 +1189,55 @@ export async function theoryImpl(db: DB, userId: string, projectId: string) {
   return artifact;
 }
 
+export async function handlePipelineAction(payload: any) {
+  const { getAuthenticatedContext } = await import("@/integrations/supabase/auth-middleware");
+  const { supabase, userId } = await getAuthenticatedContext();
+
+  const action = payload?.action;
+  const data = payload?.data as any;
+
+  switch (action) {
+    case "createRun":
+      return createRunImpl(supabase, userId, data);
+    case "research":
+      return runResearchImpl(supabase, userId, data.projectId);
+    case "ideas":
+      return surfaceIdeasImpl(supabase, userId, data.projectId);
+    case "select":
+      return selectIdeaImpl(supabase, userId, data);
+    case "ideaGraph":
+      return generateIdeaGraphImpl(supabase, userId, data.projectId);
+    case "formulate":
+      return formulateImpl(supabase, userId, data.projectId);
+    case "pseudocode":
+      return pseudocodeImpl(supabase, userId, data.projectId);
+    case "code":
+      return codeImpl(supabase, userId, data.projectId);
+    case "review":
+      return reviewArtifactImpl(supabase, userId, data);
+    case "execute":
+      return executeImpl(supabase, userId, data.projectId);
+    case "rerun":
+      return rerunImpl(supabase, userId, data.projectId);
+    case "propose":
+      return architectureProposalImpl(supabase, userId, data.projectId);
+    case "decide":
+      return architectureDecisionImpl(supabase, userId, data);
+    case "paper":
+      return paperImpl(supabase, userId, data.projectId);
+    case "plagiarism":
+      return runPlagiarismCheckImpl(supabase, userId, data.projectId);
+    case "memory":
+      return distillMemoryImpl(supabase, userId, data.projectId);
+    case "theory":
+      return theoryImpl(supabase, userId, data.projectId);
+    case "supervisorStatus":
+      return supervisorAssessHealth(supabase, userId, data.projectId);
+    case "supervisorAdvance":
+      return supervisorAutoAdvance(supabase, userId, data.projectId);
+    default:
+      throw new Error(`Unknown pipeline action: ${action}`);
+  }
+}
+
 export { scanForInjection, generateIdeaGraphImpl };
