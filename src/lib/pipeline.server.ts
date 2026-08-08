@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@supabase/supabase-js";
-
+import { startSandboxExecution, pollSandboxExecution } from "./sandbox-execution.server";
 import { FIREWALL_SYSTEM, askJson, askText, wrapUntrusted } from "./ai.server";
 import { retrieveSources, scanForInjection } from "./research.server";
 import { generateIdeaGraphImpl } from "./idea-graph.server";
@@ -607,8 +607,12 @@ export async function reviewArtifactImpl(
 }
 
 /* ------------------------------ 10, 11, 12 ----------------------------- */
+/*  NON-BLOCKING EXECUTION: startExecuteVersion kicks off a background     */
+/*  sandbox run and returns immediately. pollExecuteImpl is called         */
+/*  repeatedly afterward (short, cheap calls) until it reports done.       */
+/* ------------------------------------------------------------------ */
 
-async function executeVersion(
+async function startExecuteVersion(
   db: DB,
   userId: string,
   projectId: string,
@@ -626,113 +630,91 @@ async function executeVersion(
     .maybeSingle();
   const version = (last?.version ?? 0) + 1;
 
-  let cleanCode = extractCleanPythonCode(code.content);
-  let stdout = "";
-  let stderr = "";
-  let success = true;
+  const cleanCode = extractCleanPythonCode(code.content);
 
-  const e2bKey = process.env["E2B_API_KEY"];
-  if (e2bKey) {
-    try {
-      const { Sandbox } = await import("@e2b/code-interpreter");
-      const sbx = await Sandbox.create({
-        apiKey: e2bKey,
-        envs: {
-          KAGGLE_API_TOKEN: process.env["KAGGLE_API_TOKEN"] || process.env["KAGGLE_API_KEY"] || "",
-          KAGGLE_USERNAME: process.env["KAGGLE_USERNAME"] || "",
-          KAGGLE_KEY: process.env["KAGGLE_KEY"] || process.env["KAGGLE_API_KEY"] || "",
-        },
-        timeoutMs: 300000,
-      });
+  const { sandboxId, startedOk, immediateNote } = await startSandboxExecution(cleanCode);
 
-      const autoInstallHeader = `import subprocess, sys, os
+  if (!startedOk || !sandboxId) {
+    // Could not even start (e.g. missing API key) — fail fast, no polling needed.
+    const { data: created, error } = await db
+      .from("experiment_versions")
+      .insert({
+        project_id: projectId,
+        user_id: userId,
+        version,
+        label: opts.label,
+        config: opts.config,
+        metrics: {},
+        score: 0.1,
+        verdict: "bad",
+        architecture_change: opts.architecture_change,
+        parent_version: opts.parent ?? last?.version ?? null,
+        logs: immediateNote || "Failed to start sandbox execution.",
+      })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    await setStage(db, projectId, STAGE.rerun);
+    return { pending: false, version: created };
+  }
 
-try:
-    import torch
-except ImportError:
-    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cpu"], check=False)
+  // Placeholder row so the UI has something to show while it runs.
+  const { data: pendingRow, error } = await db
+    .from("experiment_versions")
+    .insert({
+      project_id: projectId,
+      user_id: userId,
+      version,
+      label: opts.label,
+      config: opts.config,
+      metrics: {},
+      score: null,
+      verdict: "pending",
+      architecture_change: opts.architecture_change,
+      parent_version: opts.parent ?? last?.version ?? null,
+      logs: "Sandbox execution started, running in background...",
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
 
-_NEEDED_PACKAGES = {
-    'kaggle': 'kaggle',
-    'pandas': 'pandas',
-    'sklearn': 'scikit-learn',
-    'PIL': 'pillow',
-    'scipy': 'scipy',
-    'cv2': 'opencv-python',
-    'tqdm': 'tqdm',
+  await db
+    .from("projects")
+    .update({
+      pending_sandbox_id: sandboxId,
+      pending_exec_meta: { experiment_version_id: pendingRow.id, version },
+    })
+    .eq("id", projectId);
+
+  await log(db, userId, projectId, STAGE.execution, "Sandbox execution started (background, non-blocking)", {
+    actor: "sandbox",
+    detail: { sandbox_id: sandboxId, version },
+  });
+
+  return { pending: true, version: pendingRow };
 }
 
-for _mod, _pip in _NEEDED_PACKAGES.items():
-    try:
-        __import__(_mod)
-    except ImportError:
-        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", _pip], check=False)
+export async function pollExecuteImpl(db: DB, userId: string, projectId: string) {
+  const project = await loadProject(db, projectId);
+  const sandboxId: string | null = (project as any).pending_sandbox_id ?? null;
+  const meta = (project as any).pending_exec_meta ?? null;
 
-_kkey = os.environ.get("KAGGLE_KEY") or os.environ.get("KAGGLE_API_TOKEN") or os.environ.get("KAGGLE_API_KEY")
-_kuser = os.environ.get("KAGGLE_USERNAME") or "atharv0919"
-if _kkey:
-    os.environ["KAGGLE_KEY"] = _kkey
-    os.environ["KAGGLE_API_TOKEN"] = _kkey
-    os.environ["KAGGLE_USERNAME"] = _kuser
-    try:
-        import json, pathlib
-        kdir = pathlib.Path.home() / ".kaggle"
-        kdir.mkdir(parents=True, exist_ok=True)
-        kfile = kdir / "kaggle.json"
-        kfile.write_text(json.dumps({"username": _kuser, "key": _kkey, "token": _kkey}))
-        os.chmod(kfile, 0o600)
-    except Exception:
-        pass
-
-`;
-
-      const codeToRun = `${autoInstallHeader}\n\n${cleanCode}`;
-      const execution = await sbx.runCode(codeToRun);
-      stdout = (execution.logs.stdout || []).join("\n");
-      stderr = (execution.logs.stderr || []).join("\n");
-      if (execution.error) {
-        stderr += `\n${execution.error.name || "Error"}: ${execution.error.value || execution.error}\n${execution.error.traceback || ""}`;
-        success = false;
-      }
-      await sbx.kill().catch(() => {});
-    } catch (err: any) {
-      stdout = `E2B Execution note: ${err?.message || err}`;
-      stderr = err?.message || String(err);
-      success = false;
-    }
-  } else {
-    stdout = "E2B_API_KEY is not configured in environment variables. Set E2B_API_KEY in Vercel to run code in E2B cloud sandbox.";
+  if (!sandboxId || !meta) {
+    return { pending: false, done: true, note: "No execution in progress." };
   }
 
-  if (!success || !stdout || stdout.includes("E2B_API_KEY is not configured")) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
-      let localRes = await fetch("http://127.0.0.1:8765/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: cleanCode }),
-        signal: controller.signal,
-      }).catch(async () => {
-        return fetch("http://127.0.0.1:8765", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: cleanCode }),
-          signal: controller.signal,
-        });
-      });
-      clearTimeout(timeoutId);
+  const result = await pollSandboxExecution(sandboxId);
 
-      if (localRes && localRes.ok) {
-        const localData = await localRes.json();
-        stdout = localData.stdout || "";
-        stderr = localData.stderr || "";
-        success = localData.success ?? (localData.exit_code === 0);
-      }
-    } catch {
-      // Local execution agent not active on http://127.0.0.1:8765
-    }
+  if (!result.finished) {
+    return { pending: true, done: false };
   }
+
+  // Finished — clear the pending pointer immediately so we don't double-process.
+  await db.from("projects").update({ pending_sandbox_id: null, pending_exec_meta: null }).eq("id", projectId);
+
+  const stdout = result.stdout || "";
+  const stderr = result.stderr || "";
+  const success = result.success && !result.error;
 
   let realMetrics: Record<string, number> = {};
   const jsonMatches = stdout.match(/\{[^{}]*"(?:loss|accuracy|f1|precision|recall|score|psnr|ssim|mse|val_loss)"[^{}]*\}/gi);
@@ -788,74 +770,73 @@ Do not fabricate fake numbers if stdout contains real ones.`,
       metrics: realMetrics,
       score: success ? 0.95 : 0.1,
       verdict: success ? "good" : "bad",
-      analysis: success ? "Code executed in sandbox." : `Execution note: ${stderr.slice(0, 200)}`,
+      analysis: success ? "Code executed in sandbox." : `Execution note: ${(stderr || result.error || "").slice(0, 200)}`,
     },
   );
 
-  const pyResult = {
-    metrics: Object.keys(realMetrics).length > 0 ? realMetrics : evalData.metrics || {},
-    score: evalData.score ?? (success ? 0.95 : 0.1),
-    verdict: evalData.verdict || (success ? "good" : "bad"),
-    analysis: evalData.analysis || "",
-    stdout: `${stdout}\n${stderr}`.trim(),
-  };
+  const finalMetrics = Object.keys(realMetrics).length > 0 ? realMetrics : evalData.metrics || {};
+  const finalScore = evalData.score ?? (success ? 0.95 : 0.1);
+  const finalVerdict = evalData.verdict || (success ? "good" : "bad");
+  const finalAnalysis = evalData.analysis || "";
 
-  const { data: created, error } = await db
+  const experimentVersionId = meta.experiment_version_id;
+  const { data: updated, error } = await db
     .from("experiment_versions")
-    .insert({
-      project_id: projectId,
-      user_id: userId,
-      version,
-      label: opts.label,
-      config: opts.config,
-      metrics: pyResult.metrics ?? {},
-      score: Number(pyResult.score ?? 0),
-      verdict: pyResult.verdict === "good" ? "good" : "bad",
-      architecture_change: opts.architecture_change,
-      parent_version: opts.parent ?? last?.version ?? null,
-      logs: `${pyResult.stdout ?? ""}\n\n${pyResult.analysis ?? ""}`.trim(),
+    .update({
+      metrics: finalMetrics,
+      score: Number(finalScore),
+      verdict: finalVerdict === "good" ? "good" : "bad",
+      logs: `${stdout}\n${stderr}\n\n${finalAnalysis}`.trim(),
     })
+    .eq("id", experimentVersionId)
     .select("*")
     .single();
   if (error) throw new Error(error.message);
 
-  const commands = pyResult.stdout ? pyResult.stdout.split("\\n").slice(0, 5) : [];
-
+  const commands = stdout ? stdout.split("\\n").slice(0, 5) : [];
   for (const cmd of commands) {
     await log(db, userId, projectId, STAGE.execution, cmd, {
       actor: "sandbox",
-      detail: { version, isolated: true, network: "denied" },
+      detail: { version: updated.version, isolated: true, network: "denied" },
     });
   }
-  await log(db, userId, projectId, STAGE.results, `v${version} finished — ${created.verdict} (score ${created.score})`, {
+  await log(db, userId, projectId, STAGE.results, `v${updated.version} finished — ${updated.verdict} (score ${updated.score})`, {
     actor: "sandbox",
-    severity: created.verdict === "good" ? "info" : "warn",
+    severity: updated.verdict === "good" ? "info" : "warn",
   });
 
-  if (opts.architecture_change && last?.score != null && Number(created.score) < Number(last.score)) {
-    await db
+  if (updated.architecture_change && updated.parent_version != null) {
+    const { data: parentRow } = await db
       .from("experiment_versions")
-      .update({
-        rolled_back: true,
-        rollback_reason: `Score ${created.score} below last approved v${last.version} (${last.score}). Auto-reverted.`,
-      })
-      .eq("id", created.id);
-    await log(db, userId, projectId, STAGE.architecture, `Auto-rollback to v${last.version}`, {
-      actor: "guardrail",
-      severity: "warn",
-      detail: { from: version, to: last.version },
-    });
+      .select("version,score")
+      .eq("project_id", projectId)
+      .eq("version", updated.parent_version)
+      .maybeSingle();
+    if (parentRow?.score != null && Number(updated.score) < Number(parentRow.score)) {
+      await db
+        .from("experiment_versions")
+        .update({
+          rolled_back: true,
+          rollback_reason: `Score ${updated.score} below last approved v${parentRow.version} (${parentRow.score}). Auto-reverted.`,
+        })
+        .eq("id", updated.id);
+      await log(db, userId, projectId, STAGE.architecture, `Auto-rollback to v${parentRow.version}`, {
+        actor: "guardrail",
+        severity: "warn",
+        detail: { from: updated.version, to: parentRow.version },
+      });
+    }
   }
 
-  await setStage(db, projectId, created.verdict === "good" ? STAGE.results : STAGE.rerun);
-  return created;
+  await setStage(db, projectId, updated.verdict === "good" ? STAGE.results : STAGE.rerun);
+  return { pending: false, done: true, version: updated };
 }
 
 export async function executeImpl(db: DB, userId: string, projectId: string) {
-  await log(db, userId, projectId, STAGE.execution, "Disposable sandbox provisioned — network denied, 900s limit", {
+  await log(db, userId, projectId, STAGE.execution, "Disposable sandbox provisioned — network denied, background execution", {
     actor: "sandbox",
   });
-  return executeVersion(db, userId, projectId, {
+  return startExecuteVersion(db, userId, projectId, {
     config: { seed: 42, epochs: 10, lr: 0.001, batch_size: 32 },
     architecture_change: false,
     label: "baseline",
@@ -891,7 +872,7 @@ export async function rerunImpl(db: DB, userId: string, projectId: string) {
     actor: "strategy-agent",
     detail: { config: plan.config } as Json,
   });
-  return executeVersion(db, userId, projectId, {
+  return startExecuteVersion(db, userId, projectId, {
     config: plan.config ?? {},
     architecture_change: false,
     label: plan.label ?? "retune",
@@ -949,12 +930,12 @@ export async function architectureDecisionImpl(
     await setStage(db, input.projectId, STAGE.rerun);
     return { applied: false };
   }
-  const created = await executeVersion(db, userId, input.projectId, {
+  const result = await startExecuteVersion(db, userId, input.projectId, {
     config: { architecture_change: input.change.slice(0, 400) },
     architecture_change: true,
     label: "architecture revision",
   });
-  return { applied: true, version: created };
+  return { applied: true, ...result };
 }
 
 /* --------------------------------- 14 ---------------------------------- */
@@ -1262,6 +1243,8 @@ export async function handlePipelineAction(payload: any, req?: any) {
       return reviewArtifactImpl(supabase, userId, data);
     case "execute":
       return executeImpl(supabase, userId, data.projectId);
+    case "pollExecute":
+      return pollExecuteImpl(supabase, userId, data.projectId);
     case "rerun":
       return rerunImpl(supabase, userId, data.projectId);
     case "propose":
