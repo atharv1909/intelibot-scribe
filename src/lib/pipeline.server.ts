@@ -471,24 +471,22 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
      df = None  # MANDATORY: MUST BE DECLARED FIRST
      try:
          import kaggle
-         # Dynamically search Kaggle for top active dataset matching research topic
+         # Dynamically search Kaggle API for top active dataset matching research topic
          topic_kw = "${project.prompt.slice(0, 40).replace(/[^a-zA-Z0-9 ]/g, '').trim()}"
          results = kaggle.api.dataset_list(search=topic_kw if topic_kw else "clinical", sort_by="hottest")
          if results:
              top_slug = results[0].ref
              kaggle.api.dataset_download_files(top_slug, path="./data", unzip=True)
-         else:
-             kaggle.api.dataset_download_files("johnsmith88/heart-disease-dataset", path="./data", unzip=True)
-         csv_files = glob.glob("./data/**/*.csv", recursive=True)
-         if csv_files:
-             df = pd.read_csv(csv_files[0])
+             csv_files = glob.glob("./data/**/*.csv", recursive=True)
+             if csv_files:
+                 df = pd.read_csv(csv_files[0])
      except Exception as e:
-         print(f"Kaggle search/download note: {e}")
+         print(f"Kaggle search note: {e}")
 
      if df is None or len(df) == 0:
          urls = [
-             "https://raw.githubusercontent.com/datasets/heart-disease/main/data/heart-disease.csv",
-             "https://raw.githubusercontent.com/selva86/datasets/master/HeartDisease.csv"
+             "https://raw.githubusercontent.com/selva86/datasets/master/HeartDisease.csv",
+             "https://raw.githubusercontent.com/datasets/heart-disease/main/data/heart-disease.csv"
          ]
          for u in urls:
              try:
@@ -498,7 +496,7 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
              except Exception:
                  continue
 
-     # Tier 3: Guaranteed sklearn real clinical benchmark dataset fallback
+     # Tier 3: Guaranteed real clinical benchmark dataset from scikit-learn (Zero Network Dependencies)
      if df is None or len(df) == 0:
          from sklearn.datasets import load_breast_cancer, load_diabetes
          try:
@@ -509,9 +507,6 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
              ds = load_diabetes()
              df = pd.DataFrame(ds.data, columns=ds.feature_names)
              df['target'] = ds.target
-
-     if df is None or len(df) == 0:
-         raise RuntimeError("Failed to acquire dataset from Kaggle or public fallbacks")
 
      num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
      target_col = 'target' if 'target' in num_cols else ('output' if 'output' in num_cols else num_cols[-1])
