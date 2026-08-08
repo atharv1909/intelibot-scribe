@@ -34,10 +34,31 @@ export const Route = createFileRoute("/_authenticated/runs/")({
   component: RunsPage,
 });
 
-import { runPipeline } from "@/lib/pipeline.functions";
-
 async function apiCall(action: string, data: any) {
-  return runPipeline({ data: { action, data } });
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+
+  const res = await fetch("/api/pipeline", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ action, ...data }),
+  });
+
+  const text = await res.text();
+  let json: any = {};
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`API error (${res.status}): ${text.slice(0, 120)}`);
+  }
+
+  if (!res.ok || json.statusCode || json.error) {
+    throw new Error(json.statusMessage || json.error || `Action ${action} failed (${res.status})`);
+  }
+  return json.result;
 }
 
 function RunsPage() {
