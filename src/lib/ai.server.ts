@@ -41,7 +41,9 @@ async function post(body: Record<string, unknown>, modelOverride?: string) {
 
 export async function askText(messages: ChatMessage[]): Promise<string> {
   const json = await post({ messages });
-  return json.choices?.[0]?.message?.content?.trim() ?? "";
+  const content = json.choices?.[0]?.message?.content?.trim();
+  if (!content) throw new Error("AI returned an empty response — check Groq API status or rate limits.");
+  return content;
 }
 
 function extractJson(raw: string): string {

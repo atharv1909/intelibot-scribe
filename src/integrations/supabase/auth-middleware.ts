@@ -58,7 +58,7 @@ export async function getAuthenticatedContextFromRequest(request: Request) {
         userId = data.claims.sub;
       }
     } catch {
-      // Ignore token decode error and use default user context
+      // Use fallback default user ID
     }
   }
 
@@ -66,21 +66,26 @@ export async function getAuthenticatedContextFromRequest(request: Request) {
 }
 
 export async function getAuthenticatedContext() {
-  const { getRequest } = await import('@tanstack/react-start/server');
-  const request = getRequest();
-  if (!request) {
-    const SUPABASE_URL =
-      process.env['SUPABASE_URL'] ||
-      process.env['VITE_SUPABASE_URL'] ||
-      'https://ytxggpkqiotocubltqsk.supabase.co';
+  const SUPABASE_URL =
+    process.env['SUPABASE_URL'] ||
+    process.env['VITE_SUPABASE_URL'] ||
+    'https://ytxggpkqiotocubltqsk.supabase.co';
 
-    const SUPABASE_PUBLISHABLE_KEY =
-      process.env['SUPABASE_PUBLISHABLE_KEY'] ||
-      process.env['VITE_SUPABASE_PUBLISHABLE_KEY'] ||
-      'sb_publishable_k_QCC0Af8s1-J6JnaJA9rQ_sNJ0HPIK';
+  const SUPABASE_PUBLISHABLE_KEY =
+    process.env['SUPABASE_PUBLISHABLE_KEY'] ||
+    process.env['VITE_SUPABASE_PUBLISHABLE_KEY'] ||
+    'sb_publishable_k_QCC0Af8s1-J6JnaJA9rQ_sNJ0HPIK';
 
-    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-    return { supabase, userId: "00000000-0000-0000-0000-000000000000" };
+  try {
+    const { getRequest } = await import('@tanstack/react-start/server');
+    const req = getRequest();
+    if (req?.headers) {
+      return getAuthenticatedContextFromRequest(req);
+    }
+  } catch {
+    // Outside TanStack Start context (Vercel Serverless Function / Nitro API)
   }
-  return getAuthenticatedContextFromRequest(request);
+
+  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+  return { supabase, userId: "00000000-0000-0000-0000-000000000000" };
 }

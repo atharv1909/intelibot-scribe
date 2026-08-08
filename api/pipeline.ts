@@ -1,8 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { handlePipelineAction } from "../src/lib/pipeline.server";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Set CORS headers
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
@@ -12,8 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   );
 
   if (req.method === "OPTIONS") {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   if (req.method !== "POST") {
@@ -22,6 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const { handlePipelineAction } = await import("../src/lib/pipeline.server");
     const result = await handlePipelineAction(body);
     return res.status(200).json({ ok: true, result });
   } catch (err: any) {
