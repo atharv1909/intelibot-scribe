@@ -5,6 +5,8 @@ import { FIREWALL_SYSTEM, askJson, askText, wrapUntrusted } from "./ai.server.js
 import { retrieveSources, scanForInjection } from "./research.server.js";
 import { generateIdeaGraphImpl } from "./idea-graph.server.js";
 
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
 export type DB = SupabaseClient<any>;
 
 export async function getAuthenticatedContext(req?: any) {
@@ -398,6 +400,27 @@ async function saveArtifact(
   return data;
 }
 
+export async function ideaGraphImpl(db: DB, userId: string, projectId: string) {
+  const project = await loadProject(db, projectId);
+  const idea = await selectedIdea(db, projectId);
+  const { data: sources } = await db
+    .from("sources")
+    .select("title,abstract")
+    .eq("project_id", projectId)
+    .order("relevance", { ascending: false })
+    .limit(8);
+
+  const graph = await generateIdeaGraphImpl(project.prompt, idea, sources ?? []);
+
+  const artifact = await saveArtifact(db, userId, projectId, "idea_graph", JSON.stringify(graph));
+  await log(db, userId, projectId, STAGE.ideaGraph, "Idea positioning graph generated", {
+    actor: "idea-graph-agent",
+    detail: { nodes: graph.nodes?.length ?? 0, edges: graph.edges?.length ?? 0 },
+  });
+  await setStage(db, projectId, STAGE.formulation);
+  return artifact;
+}
+
 export async function formulateImpl(db: DB, userId: string, projectId: string) {
   const project = await loadProject(db, projectId);
   const idea = await selectedIdea(db, projectId);
@@ -736,17 +759,19 @@ if _kkey:
 
   let realMetrics: Record<string, number> = {};
   const jsonMatches = stdout.match(/\{[^{}]*"(?:loss|accuracy|f1|precision|recall|score|psnr|ssim|mse|val_loss)"[^{}]*\}/gi);
-  if (jsonMatches && jsonMatches.length > 0) {
+  const lastJsonMatch = jsonMatches?.[jsonMatches.length - 1];
+  if (lastJsonMatch) {
     try {
-      realMetrics = JSON.parse(jsonMatches[jsonMatches.length - 1]);
+      realMetrics = JSON.parse(lastJsonMatch);
     } catch {}
   }
   if (Object.keys(realMetrics).length === 0) {
     const lines = stdout.split("\n").map((l) => l.trim()).filter(Boolean);
     for (let i = lines.length - 1; i >= Math.max(0, lines.length - 10); i--) {
-      if (lines[i].startsWith("{") && lines[i].endsWith("}")) {
+      const line = lines[i];
+      if (line && line.startsWith("{") && line.endsWith("}")) {
         try {
-          const parsed = JSON.parse(lines[i]);
+          const parsed = JSON.parse(line);
           if (typeof parsed === "object" && parsed !== null) {
             realMetrics = parsed as Record<string, number>;
             break;
@@ -1251,7 +1276,7 @@ export async function handlePipelineAction(payload: any, req?: any) {
     case "select":
       return selectIdeaImpl(supabase, userId, data);
     case "ideaGraph":
-      return generateIdeaGraphImpl(supabase, userId, data.projectId);
+      return ideaGraphImpl(supabase, userId, data.projectId);
     case "formulate":
       return formulateImpl(supabase, userId, data.projectId);
     case "pseudocode":
