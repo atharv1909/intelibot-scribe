@@ -129,6 +129,24 @@ function useRunData(id: string) {
   return { project, sources, ideas, artifacts, versions, logs, supervisorDecisions };
 }
 
+async function apiCall(action: string, data: any) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  const res = await fetch("/api/pipeline", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ action, ...data }),
+  });
+  const json = await res.json();
+  if (!res.ok || json.error) {
+    throw new Error(json.error || `Pipeline call ${action} failed (${res.status})`);
+  }
+  return json.result;
+}
+
 function RunWorkspace() {
   const { id } = useParams({ from: "/_authenticated/runs/$id" });
   const qc = useQueryClient();
@@ -141,24 +159,24 @@ function RunWorkspace() {
   };
 
   const call = {
-    research: runResearch,
-    ideas: surfaceIdeas,
-    select: selectIdea,
-    ideaGraph: generateIdeaGraph,
-    formulate: formulateIdea,
-    pseudocode: generatePseudocode,
-    code: generateCode,
-    review: reviewArtifact,
-    execute: executeRun,
-    rerun: rerunExperiment,
-    propose: proposeArchitectureChange,
-    decide: decideArchitectureChange,
-    paper: generatePaper,
-    plagiarism: runPlagiarismCheck,
-    memory: distillMemory,
-    theory: runTheoryBranch,
-    supervisorStatus: getSupervisorStatus,
-    supervisorAdvance: triggerSupervisorAdvance,
+    research: (args: { data: { projectId: string } }) => apiCall("research", args.data),
+    ideas: (args: { data: { projectId: string } }) => apiCall("ideas", args.data),
+    select: (args: { data: { projectId: string; ideaId?: string; title?: string; summary?: string } }) => apiCall("select", args.data),
+    ideaGraph: (args: { data: { projectId: string } }) => apiCall("ideaGraph", args.data),
+    formulate: (args: { data: { projectId: string } }) => apiCall("formulate", args.data),
+    pseudocode: (args: { data: { projectId: string } }) => apiCall("pseudocode", args.data),
+    code: (args: { data: { projectId: string } }) => apiCall("code", args.data),
+    review: (args: { data: { projectId: string; artifactId: string; status: "approved" | "rejected"; notes?: string; content?: string } }) => apiCall("review", args.data),
+    execute: (args: { data: { projectId: string } }) => apiCall("execute", args.data),
+    rerun: (args: { data: { projectId: string } }) => apiCall("rerun", args.data),
+    propose: (args: { data: { projectId: string } }) => apiCall("propose", args.data),
+    decide: (args: { data: { projectId: string; approved: boolean; change: string } }) => apiCall("decide", args.data),
+    paper: (args: { data: { projectId: string } }) => apiCall("paper", args.data),
+    plagiarism: (args: { data: { projectId: string } }) => apiCall("plagiarism", args.data),
+    memory: (args: { data: { projectId: string } }) => apiCall("memory", args.data),
+    theory: (args: { data: { projectId: string } }) => apiCall("theory", args.data),
+    supervisorStatus: (args: { data: { projectId: string } }) => apiCall("supervisorStatus", args.data),
+    supervisorAdvance: (args: { data: { projectId: string } }) => apiCall("supervisorAdvance", args.data),
   };
 
   const [pending, setPending] = useState<string | null>(null);

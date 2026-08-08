@@ -24,13 +24,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
-export async function getAuthenticatedContext() {
-  const { getRequest } = await import('@tanstack/react-start/server');
-  const request = getRequest();
-  if (!request?.headers) {
-    throw new Error('Unauthorized: No request headers available');
-  }
-
+export async function getAuthenticatedContextFromRequest(request: Request) {
   const authHeader = request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw new Error('Unauthorized: Missing or invalid authorization header');
@@ -69,4 +63,13 @@ export async function getAuthenticatedContext() {
   }
 
   return { supabase, userId: data.claims.sub, claims: data.claims };
+}
+
+export async function getAuthenticatedContext() {
+  const { getRequest } = await import('@tanstack/react-start/server');
+  const request = getRequest();
+  if (!request) {
+    throw new Error('Unauthorized: No request available');
+  }
+  return getAuthenticatedContextFromRequest(request);
 }

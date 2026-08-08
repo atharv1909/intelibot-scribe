@@ -34,10 +34,28 @@ export const Route = createFileRoute("/_authenticated/runs/")({
   component: RunsPage,
 });
 
+async function apiCall(action: string, data: any) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  const res = await fetch("/api/pipeline", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ action, ...data }),
+  });
+  const json = await res.json();
+  if (!res.ok || json.error) {
+    throw new Error(json.error || `Pipeline call ${action} failed (${res.status})`);
+  }
+  return json.result;
+}
+
 function RunsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const start = createRun;
+  const start = (args: { data: any }) => apiCall("createRun", args.data);
 
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"vague" | "detailed">("vague");
