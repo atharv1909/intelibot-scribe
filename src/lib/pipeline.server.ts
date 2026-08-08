@@ -458,9 +458,10 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `2. DOMAIN-INTELLIGENT DATASET ACQUISITION (ABSOLUTELY MANDATORY):\n` +
         `   - CATEGORY A: MedTech, Clinical, Tabular, Vision, NLP, or Empirical Benchmark Domains (Where Data Exists):\n` +
         `     * You MUST use REAL published datasets. Synthetic/dummy data is STRICTLY BANNED for these domains.\n` +
-        `     * First attempt Kaggle download with positional syntax: \`kaggle.api.dataset_download_files("harishnarayanan82/heart-disease-uci", path="./data", unzip=True)\` (NEVER pass \`dataset_name=...\`).\n` +
-        `     * Wrap Kaggle in \`try ... except Exception:\`. If Kaggle returns an error, fall back to fetching the REAL dataset directly from an active public URL:\n` +
-        `       e.g., \`df = pd.read_csv("https://raw.githubusercontent.com/adrian-prado/Heart-Disease-UCI/master/heart.csv")\`.\n` +
+        `     * First attempt downloading a active, popular Kaggle dataset: \`kaggle.api.dataset_download_files("rashikrahmanpritom/heart-attack-analysis-prediction-dataset", path="./data", unzip=True)\` (positional args only, NEVER pass \`dataset_name=...\`).\n` +
+        `     * Wrap Kaggle in \`try ... except Exception:\`. If Kaggle returns 403/404, fall back to trying a list of active public raw dataset URLs:\n` +
+        `       \`urls = ["https://raw.githubusercontent.com/datasets/heart-disease/main/data/heart-disease.csv", "https://raw.githubusercontent.com/selva86/datasets/master/HeartDisease.csv"]\`\n` +
+        `       \`for u in urls:\` \`try: df = pd.read_csv(u); break\` \`except Exception: pass\`\n` +
         `   - CATEGORY B: Theoretical AI, Custom Latent Embeddings, Novel Math Operators, or Synthetic Latent Spaces (Where No Kaggle Dataset Exists):\n` +
         `     * Synthesize clean, structured PyTorch tensors (e.g., \`embeddings = torch.randn(250, 512)\`) that directly represent the theoretical embedding/latent space.\n\n` +
         `3. BULLETPROOF DATA LOADING & PREPROCESSING:\n` +
