@@ -563,7 +563,35 @@ async function executeVersion(
         timeoutMs: 300000,
       });
 
-      const execution = await sbx.runCode(cleanCode);
+      const autoInstallHeader = `import subprocess, sys, os
+
+_NEEDED_PACKAGES = {
+    'kaggle': 'kaggle',
+    'pandas': 'pandas',
+    'sklearn': 'scikit-learn',
+    'PIL': 'pillow',
+    'scipy': 'scipy',
+    'cv2': 'opencv-python',
+    'tqdm': 'tqdm',
+    'torchvision': 'torchvision',
+}
+
+for _mod, _pip in _NEEDED_PACKAGES.items():
+    try:
+        __import__(_mod)
+    except ImportError:
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", _pip], check=False)
+
+_kkey = os.environ.get("KAGGLE_KEY") or os.environ.get("KAGGLE_API_TOKEN") or os.environ.get("KAGGLE_API_KEY")
+if _kkey:
+    os.environ["KAGGLE_KEY"] = _kkey
+    os.environ["KAGGLE_API_TOKEN"] = _kkey
+    if not os.environ.get("KAGGLE_USERNAME"):
+        os.environ["KAGGLE_USERNAME"] = "intelibot"
+`;
+
+      const codeToRun = `${autoInstallHeader}\n\n${cleanCode}`;
+      const execution = await sbx.runCode(codeToRun);
       stdout = (execution.logs.stdout || []).join("\n");
       stderr = (execution.logs.stderr || []).join("\n");
       if (execution.error) {
