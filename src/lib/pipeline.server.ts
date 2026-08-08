@@ -418,6 +418,23 @@ export async function pseudocodeImpl(db: DB, userId: string, projectId: string) 
   return artifact;
 }
 
+export function extractCleanPythonCode(raw: string): string {
+  if (!raw) return "";
+  const blockMatch = raw.match(/```(?:python)?\s*\n([\s\S]*?)\n```/i);
+  if (blockMatch && blockMatch[1]) {
+    return blockMatch[1].trim();
+  }
+  let clean = raw.replace(/^```(?:python)?\n?/i, "").trim();
+  const printPos = clean.lastIndexOf("print(json.dumps");
+  if (printPos !== -1) {
+    const endParen = clean.indexOf(")", printPos);
+    if (endParen !== -1) {
+      clean = clean.slice(0, endParen + 1).trim();
+    }
+  }
+  return clean.replace(/```/g, "").trim();
+}
+
 export async function codeImpl(db: DB, userId: string, projectId: string) {
   const pseudo = await latestApproved(db, projectId, "pseudocode");
   if (!pseudo || pseudo.status !== "approved") throw new Error("Approve the pseudocode first.");
@@ -435,19 +452,19 @@ export async function codeImpl(db: DB, userId: string, projectId: string) {
         `SELECTED IDEA:\n${idea.title}\n${idea.summary ?? ""}\n\n` +
         `APPROVED PSEUDOCODE:\n${pseudo.content.slice(0, 9000)}\n\n` +
         `STRICT IMPLEMENTATION REQUIREMENTS:\n` +
-        `1. DATASET ACQUISITION (ABSOLUTELY MANDATORY):\n` +
-        `   - You MUST dynamically search and download a REAL dataset from Kaggle using the Python Kaggle API: \`import kaggle\` -> \`kaggle.api.dataset_download_cli(dataset_name, unzip=True)\`.\n` +
-        `   - YOU ARE STRICTLY FORBIDDEN from creating fake arrays, dummy dictionaries (\`patient_data = {...}\`), or assuming data exists.\n` +
-        `   - NEVER fall back to unrelated datasets (such as heart failure, MIMIC-IV, iris, or titanic) if the prompt is about Diffusion, Vision, NLP, or 3D Rendering!\n\n` +
-        `2. REAL METRICS EXECUTION & STDOUT JSON (ABSOLUTELY MANDATORY):\n` +
-        `   - You MUST compute actual validation/test metrics by running your implemented model's forward pass on the real downloaded test data.\n` +
-        `   - CRITICAL PROHIBITION: YOU ARE STRICTLY FORBIDDEN from writing \`accuracy = 0.9\`, \`precision = 0.8\`, or any other hardcoded fallback numbers.\n` +
-        `   - At the end of execution, print ACTUAL REAL metrics computed directly from model evaluation into STDOUT as JSON:\n` +
-        `     \`print(json.dumps({"loss": float(final_loss), "accuracy": float(acc), ...}))\`\n\n` +
-        `3. DEPENDENCIES & COMPATIBILITY:\n` +
-        `   - Do NOT use \`pip install\` or \`subprocess.run\` in code. Use standard imports (\`torch\`, \`torch.nn\`, \`torchvision\`, \`numpy\`, \`scipy\`, \`sklearn\`, \`kaggle\`, \`pandas\`, \`PIL\`).\n` +
-        `   - Keep model size reasonable (e.g. 1-2 epochs, small batch size) so it executes smoothly and quickly on CPU/GPU.\n` +
-        `   - Set deterministic seeds (\`torch.manual_seed(42)\`, \`np.random.seed(42)\`).\n\n` +
+        `1. OUTPUT FORMAT (ABSOLUTELY MANDATORY):\n` +
+        `   - Return ONLY a single markdown \`\`\`python code block containing 100% executable Python.\n` +
+        `   - DO NOT write any introductory or concluding conversational text, notes, or explanations outside the code block.\n\n` +
+        `2. BUG-FREE & DOMAIN-MATCHED IMPLEMENTATION:\n` +
+        `   - Match the research prompt ("${project.prompt.slice(0, 150)}"). If the prompt is about Diffusion, Vision, NLP, 3DGS, or Tabular ML, implement PyTorch models for THAT domain.\n` +
+        `   - All variables MUST be explicitly defined. (DO NOT reference undefined variables like \`numerical_features\` or unimported packages).\n` +
+        `   - Convert DataFrames cleanly: \`X = df.select_dtypes(include=[np.number]).fillna(0).values.astype(np.float32)\`.\n` +
+        `   - Ensure PyTorch input layers (\`nn.Linear(X.shape[1], ...)\`), tensor shapes, and loss functions match correctly.\n\n` +
+        `3. DATASET & METRICS COMPUTATION (ABSOLUTELY MANDATORY):\n` +
+        `   - Search/download a real Kaggle dataset (\`import kaggle\` -> \`kaggle.api.dataset_download_cli(...)\`), or generate domain-matched synthetic torch tensors if download is unavailable.\n` +
+        `   - Run model evaluation on the test set and print real computed metrics directly to STDOUT as JSON at the very end of script:\n` +
+        `     \`print(json.dumps({"loss": float(final_loss), "accuracy": float(acc)}))\`\n` +
+        `   - YOU ARE STRICTLY FORBIDDEN from hardcoding static numbers (\`accuracy = 0.9\`).\n\n` +
         `Return PURE RUNNABLE PYTHON CODE ONLY inside a markdown python block.`,
     },
   ]);
@@ -527,7 +544,7 @@ async function executeVersion(
   const version = (last?.version ?? 0) + 1;
 
   // Execute code in E2B Cloud Sandbox natively from Node.js
-  let cleanCode = code.content.replace(/^```(?:python)?\n?/i, "").replace(/\n?```$/i, "").trim();
+  let cleanCode = extractCleanPythonCode(code.content);
   let stdout = "";
   let stderr = "";
   let success = true;
