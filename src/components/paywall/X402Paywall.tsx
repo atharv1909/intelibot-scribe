@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { ShieldAlert, ShieldCheck, Wallet, ArrowRight, Zap, CheckCircle2, Lock, Cpu, Coins, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -18,7 +17,6 @@ interface PaywallSpec {
 }
 
 export function X402Paywall({ next = "/runs" }: { next?: string }) {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [paywallSpec, setPaywallSpec] = useState<PaywallSpec | null>(null);
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
@@ -137,7 +135,7 @@ export function X402Paywall({ next = "/runs" }: { next?: string }) {
         addLog("Redirecting to requested pipeline route...");
 
         setTimeout(() => {
-          void navigate({ to: next as any });
+          window.location.href = next;
         }, 1000);
       }
     } catch (err: any) {
@@ -262,7 +260,7 @@ export function X402Paywall({ next = "/runs" }: { next?: string }) {
               Your session is authenticated via x402 HTTP Payment Protocol. All pipeline endpoints are now fully accessible.
             </p>
             <Button
-              onClick={() => void navigate({ to: next as any })}
+              onClick={() => { window.location.href = next; }}
               className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
             >
               Proceed to Workspace <ArrowRight className="w-4 h-4" />
