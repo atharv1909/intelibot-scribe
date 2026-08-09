@@ -1285,11 +1285,7 @@ export async function handlePipelineAction(payload: any, req?: any) {
     case "select":
       return selectIdeaImpl(supabase, userId, data);
     case "ideaGraph":
-<<<<<<< HEAD
       return generateIdeaGraphForProjectImpl(supabase, userId, data.projectId);
-=======
-      return ideaGraphImpl(supabase, userId, data.projectId);
->>>>>>> 2bc06224f2ffdc5a9c9341499537497acfe07790
     case "formulate":
       return formulateImpl(supabase, userId, data.projectId);
     case "pseudocode":
