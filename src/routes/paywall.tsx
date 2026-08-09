@@ -6,8 +6,9 @@ export const Route = createFileRoute("/paywall")({
 });
 
 function PaywallPage() {
-  const searchParams = new URLSearchParams(window.location.search);
-  const next = searchParams.get("next") || "/runs";
+  const next = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("next") || "/runs"
+    : "/runs";
 
   return <X402Paywall next={next} />;
 }
